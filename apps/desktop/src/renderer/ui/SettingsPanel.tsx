@@ -1,5 +1,6 @@
 import type { ApiToken, Scope } from '@halocline/core'
 import { createResource, createSignal, For, Show } from 'solid-js'
+import type { OverlayInfo } from '../../shared/ipc'
 import { call } from './bridge'
 import type { AppState } from './store'
 
@@ -40,6 +41,7 @@ export function SettingsPanel(props: { state: AppState }) {
       <OutputAndTransitions state={props.state} />
       <YouTubeMusic state={props.state} />
       <LibraryFolders state={props.state} />
+      <ObsOverlay state={props.state} />
       <ApiTokens state={props.state} />
     </section>
   )
@@ -181,6 +183,50 @@ function LibraryFolders(props: { state: AppState }) {
         Folders are watched for changes. Removing a folder makes its tracks unavailable; their tags
         and stream-safe flags are kept in case you add it back.
       </p>
+    </>
+  )
+}
+
+/** Settings → Overlay (PLAN §8). The URL holds a token, so it's copied, never shown. */
+function ObsOverlay(props: { state: AppState }) {
+  const [copied, setCopied] = createSignal<OverlayInfo | null>(null)
+  const [rotated, setRotated] = createSignal(false)
+  const copy = (rotate: boolean) =>
+    props.state.run(async () => {
+      setCopied(await call(rotate ? 'overlay.rotate' : 'overlay.copy'))
+      setRotated(rotate)
+    })
+
+  return (
+    <>
+      <h2>OBS overlay</h2>
+      <p>
+        Add a <strong>Browser Source</strong> in OBS and paste the overlay URL. It shows the current
+        song with its art and a progress bar on a transparent background, and hides itself when
+        nothing is playing or an ad is on.
+      </p>
+      <div class="button-row">
+        <button type="button" onClick={() => void copy(false)}>
+          Copy overlay URL
+        </button>
+        <button
+          type="button"
+          title="Use if the URL leaked; OBS sources need the new one"
+          onClick={() => void copy(true)}
+        >
+          New URL…
+        </button>
+      </div>
+      <Show when={copied()}>
+        {(info) => (
+          <p class="empty">
+            {rotated() ? 'New URL copied; the old one no longer works. ' : 'Copied. '}
+            Recommended source size: {info().width}×{info().height}. Colours, fonts and the bar can
+            be restyled in the source's Custom CSS (<code>--hl-text-color</code>,{' '}
+            <code>--hl-bar-color</code>, <code>--hl-font</code>, …).
+          </p>
+        )}
+      </Show>
     </>
   )
 }

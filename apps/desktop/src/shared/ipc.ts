@@ -25,6 +25,13 @@ import type {
   YtmStatus,
 } from '@halocline/core'
 
+/** The OBS overlay's address and the source size its layout is designed for (PLAN §8). */
+export interface OverlayInfo {
+  url: string
+  width: number
+  height: number
+}
+
 export interface IpcHandlers {
   'library.search': (args: { q: string }) => Recording[]
   /** Library first, then YouTube Music songs. */
@@ -58,6 +65,10 @@ export interface IpcHandlers {
   }
   'tokens.revoke': (args: { id: string }) => void
   'api.url': () => string | null
+  /** Copies the OBS overlay URL to the clipboard, creating its token on first use. */
+  'overlay.copy': () => OverlayInfo
+  /** Replaces the overlay token; the old URL stops working. Copies the new URL. */
+  'overlay.rotate': () => OverlayInfo
 }
 
 export type IpcChannel = keyof IpcHandlers

@@ -75,6 +75,8 @@ export interface Core {
   /** The direct YTM engine and its track cache, when a page runtime was given. */
   streamer: YtmStreamer | null
   tracks: TrackCache | null
+  /** Where the scanner keeps extracted cover art, named by content hash. */
+  artworkDir: string
   /** Stops the scanner and watchers, then closes the database. */
   close(): Promise<void>
 }
@@ -129,10 +131,8 @@ export function createCore(options: {
     options.dbPath === ':memory:'
       ? join(tmpdir(), 'halocline-artwork')
       : join(dirname(options.dbPath), 'artwork')
-  const scanner = new LibraryScanner(library, settings, events, {
-    artworkDir: defaultArtworkDir,
-    ...options.scanner,
-  })
+  const scannerOptions = { artworkDir: defaultArtworkDir, ...options.scanner }
+  const scanner = new LibraryScanner(library, settings, events, scannerOptions)
   return {
     db,
     events,
@@ -147,6 +147,7 @@ export function createCore(options: {
     catalog,
     streamer,
     tracks,
+    artworkDir: scannerOptions.artworkDir,
     close: async () => {
       await scanner.stop()
       await tracks?.close()

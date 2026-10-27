@@ -5,6 +5,7 @@ import { problem } from './problem'
 import { rateLimit, RateLimiter } from './rate-limit'
 import { registerEvents } from './routes/events'
 import { registerLibrary } from './routes/library'
+import { registerOverlay } from './routes/overlay'
 import { registerPlayer } from './routes/player'
 import { registerQueue } from './routes/queue'
 import { registerSearch } from './routes/search'
@@ -55,5 +56,6 @@ export function createApi(core: Core, options: ApiOptions = {}): OpenAPIHono<Api
   registerLibrary(app, core)
   registerSystem(app, core)
   registerEvents(app, core)
+  registerOverlay(app, core)
   return app
 }

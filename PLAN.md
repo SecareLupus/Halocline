@@ -383,6 +383,21 @@ the source is set to. Recommended size: 800×120.
 **Settings → Overlay:** a "Copy overlay URL" button. It creates the `overlay` token on first use,
 copies the URL, and shows the recommended size.
 
+**As built:**
+- The page is `packages/api/src/overlay/now-playing.html`.
+- Its CSP allows only its own inline script, by hash. Styles stay open, because OBS injects
+  Custom CSS as a `<style>` element.
+- `Referrer-Policy: no-referrer` keeps the token out of image requests.
+- Local cover art comes from `GET /v1/artwork/{hash}` (`read` or `overlay` scope). YouTube Music
+  art loads directly from Google's image hosts.
+- The overlay token's secret is kept (in `kv`), unlike other tokens, so the URL can be copied
+  again. It can only read what's playing.
+- `GET /v1/overlay` and `POST /v1/overlay/rotate` (admin) are the API side of the Settings button
+  and its "New URL…" (rotate) button.
+- The UI copies the URL and never displays it, in case Settings is on stream.
+- Clocks: the bar extrapolates from `positionAt`. That's safe because the API binds to loopback,
+  so OBS runs on the same machine.
+
 **Extension points** (used by the API and overlay now, and by the planned integrations later):
 integrations attach to internal hooks, so adding one doesn't touch core code.
 - Lifecycle: `onTrackChange`, `onPlayerChange`, `onQueueChange`.

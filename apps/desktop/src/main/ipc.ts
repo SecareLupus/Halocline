@@ -10,9 +10,16 @@ import {
   YtmSong,
   type Core,
 } from '@halocline/core'
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { OVERLAY_SIZE, overlayUrl } from '@halocline/api'
+import { BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
 import { z } from 'zod'
-import { IPC, type IpcChannel, type IpcHandlers, type IpcResult } from '../shared/ipc'
+import {
+  IPC,
+  type IpcChannel,
+  type IpcHandlers,
+  type IpcResult,
+  type OverlayInfo,
+} from '../shared/ipc'
 import { openYtmSignIn, signOutYtm } from './ytm-auth'
 
 type Handler<C extends IpcChannel> = (
@@ -21,6 +28,13 @@ type Handler<C extends IpcChannel> = (
 
 /** Wires UI requests to the same core services the HTTP API uses. */
 export function registerIpc(core: Core, apiUrl: () => string | null): void {
+  const copyOverlay = (secret: string): OverlayInfo => {
+    const base = apiUrl()
+    if (!base) throw new DomainError('provider_unavailable', 'The API server is not running')
+    const url = overlayUrl(base, secret)
+    clipboard.writeText(url)
+    return { url, ...OVERLAY_SIZE }
+  }
   const handlers: { [C in IpcChannel]: Handler<C> } = {
     'library.search': (a) => core.library.search(z.object({ q: z.string() }).parse(a).q),
     search: (a) => core.catalog.search(z.object({ q: z.string().min(1).max(200) }).parse(a).q),
@@ -109,6 +123,8 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
     },
     'tokens.revoke': (a) => core.tokens.revoke(z.object({ id: Id }).parse(a).id),
     'api.url': () => apiUrl(),
+    'overlay.copy': () => copyOverlay(core.tokens.overlaySecret()),
+    'overlay.rotate': () => copyOverlay(core.tokens.rotateOverlay()),
   }
 
   ipcMain.handle(

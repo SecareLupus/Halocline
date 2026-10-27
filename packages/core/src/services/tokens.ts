@@ -22,6 +22,8 @@ const toToken = (r: TokenRow): ApiToken => ({
   lastUsedAt: r.last_used_at,
 })
 
+const OVERLAY_KEY = 'overlay_token'
+
 const hash = (secret: string) => createHash('sha256').update(secret).digest('hex')
 
 /**
@@ -76,6 +78,37 @@ export class TokenService {
   revoke(id: string): void {
     const { changes } = this.db.prepare('DELETE FROM api_tokens WHERE id = ?').run(id)
     if (!changes) throw new DomainError('not_found', `No token with id ${id}`)
+  }
+
+  /**
+   * The OBS overlay's token secret, created on first use (PLAN §8). Unlike other
+   * secrets it's kept, so the overlay URL can be copied again: it can only read
+   * what's playing, and it lives in OBS scene files anyway.
+   */
+  overlaySecret(): string {
+    const stored = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(OVERLAY_KEY) as
+      { value: string } | undefined
+    if (stored) {
+      const { id, secret } = JSON.parse(stored.value) as { id: string; secret: string }
+      if (this.db.prepare('SELECT 1 FROM api_tokens WHERE id = ?').get(id)) return secret
+    }
+    const { secret, token } = this.create('OBS overlay', ['overlay'])
+    this.db
+      .prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)')
+      .run(OVERLAY_KEY, JSON.stringify({ id: token.id, secret }))
+    return secret
+  }
+
+  /** Replaces the overlay token, e.g. if its URL leaked somewhere unwanted. */
+  rotateOverlay(): string {
+    const stored = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(OVERLAY_KEY) as
+      { value: string } | undefined
+    if (stored) {
+      const { id } = JSON.parse(stored.value) as { id: string }
+      this.db.prepare('DELETE FROM api_tokens WHERE id = ?').run(id)
+      this.db.prepare('DELETE FROM kv WHERE key = ?').run(OVERLAY_KEY)
+    }
+    return this.overlaySecret()
   }
 
   private require(id: string): ApiToken {
