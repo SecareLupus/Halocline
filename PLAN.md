@@ -1,0 +1,456 @@
+# Halocline — Project Plan (draft 3)
+
+Name: **Halocline**, after the layer where fresh and salt water meet. Repo: `github.com/SecareLupus/halocline`.
+License: **GPLv3**. Targets: **Linux (Ubuntu) first, Windows second.**
+
+A desktop music player for live streaming:
+- YouTube Music is the primary cloud provider, and local files are preferred over cloud copies.
+- Local and cloud tracks share one queue.
+- Everything is controllable through an API, so external bots can drive it.
+
+## 1. Goals
+
+1. Search YouTube Music **songs only** (no videos) and the library from one search box. Library
+   results rank first.
+2. Play local files and YTM songs from **one shared queue**.
+3. Accept a Spotify, Tidal, Apple Music, YouTube or YTM link and play the matching recording. Use
+   the local copy if one exists, otherwise a cloud provider.
+4. The **Library** holds local files plus cloud tracks you've added. Library items can be tagged
+   **stream-safe**. In stream-safe mode, the API rejects untagged songs and autoplay picks only
+   tagged songs.
+5. **Two YTM playback engines, both always present:**
+   - direct streaming as the primary engine;
+   - a hidden YTM window as an automatic fallback.
+
+   When direct streaming breaks, playback keeps working through the fallback until an update
+   fixes it.
+6. **Autoplay** (a setting, on by default) adds songs *similar to what's playing* to the end of
+   the queue.
+7. **One API**, designed for this app, with a live event stream.
+8. A built-in **OBS now-playing overlay** (§8): a fixed layout served as a Browser Source page.
+
+Non-goals for the MVP: the Pear-parity integrations (ad blocking, SponsorBlock, Tuna, synced
+lyrics, Discord Rich Presence), an overlay editor, Twitch chat integration, providers other than
+YTM, mobile apps. All of these are on the Planned TODO list (§11).
+
+## 2. Architecture
+
+```
+┌──────────────────────────── Main process ─────────────────────────────┐
+│  Core services (one domain layer, zod schemas shared with the API)    │
+│    Queue · Library (SQLite + FTS5) · Scanner · Resolver · Autoplay    │
+│    Providers: Local · YTM   [future: others]                          │
+│    Stream service: track:// protocol, prefetch cache, engine select   │
+│    Analysis worker (BPM, key, loudness, embeddings)                   │
+│  Adapters (thin): IPC for the UI · HTTP API · SSE events              │
+│  Overlay pages (served by the API server)                             │
+└───────┬──────────────────────────────┬────────────────────────────────┘
+        │ IPC                          │ IPC
+┌───────▼─────────────┐      ┌─────────▼─────────────────────────┐
+│ Player renderer     │      │ Hidden YTM window (fallback)      │
+│ 2 decks → gain/fade │      │ music.youtube.com, same session   │
+│ → output device     │      │                                   │
+└───────▲─────────────┘      └───────────────────────────────────┘
+        │ state
+┌───────┴─────────────┐      ┌───────────────────────────────────┐
+│ UI renderer (Solid) │      │ OBS Browser Source                │
+│ search · queue ·    │      │ /overlay/now-playing  ◄── HTTP+SSE│
+│ library · health ·  │      └───────────────────────────────────┘
+│ settings            │
+└─────────────────────┘
+```
+
+Key decisions:
+
+- **Electron.** The fallback needs a real Chromium with a logged-in YTM session, and one runtime
+  covers Linux and Windows.
+- **One domain layer.** The UI (over IPC) and the HTTP API call the same services and validate
+  against the same zod schemas. Anything the UI can do, the API can do, and the two can't drift
+  apart.
+- **The player plays every source from a URL on a custom protocol** (`track://<sourceId>`). The
+  stream service decides what sits behind it: a local file, a cached file, or a direct YTM
+  stream. The player never knows which, so changes to how YouTube streams stay inside one module.
+- **Audio lives in its own renderer**, separate from the UI, so reloading the UI never drops audio.
+- **Two decks** (A/B `<audio>` elements) on one `AudioContext`. This gives gapless playback and
+  crossfade. Output device selection uses `setSinkId`. That covers routing to a
+  PipeWire/PulseAudio virtual sink on Linux, or a virtual cable on Windows, for OBS.
+- **Media controls:** MPRIS on Linux (Electron's built-in `mediaSession` integration first), SMTC
+  on Windows.
+
+## 3. Data model
+
+The model rests on one idea: a **Recording** is the song, and a **Source** is a place you can play
+it from. Preferring local copies falls out of the model with no special-case code.
+
+```
+Recording   id, title, artists[], album, duration_ms, isrc?, artwork,
+            in_library, stream_safe, tags[], added_at, play_count, last_played_at
+Source      id, recording_id, kind (local|ytm|…), locator (path | videoId),
+            format, bitrate, available, failure_count, last_checked
+Features    recording_id, bpm, key (Camelot), loudness_lufs, energy,
+            embedding (vector), genres[], analyzed_from (local|cache), version
+QueueItem   id, recording_id, pinned_source_id?, origin (user|api|autoplay),
+            requested_by?, added_at
+```
+
+- **Library = Recordings with `in_library = true`.** It's a superset of local files and cloud
+  tracks you've added. When a scan finds the same song on disk as a saved YTM song, it attaches a
+  `local` Source to the existing Recording (matched by ISRC, else fuzzy match plus duration).
+- **Source choice happens at play time:** a pinned source if set, otherwise local, then cache,
+  then YTM direct, then the YTM fallback window. Because the choice is made at play time, a dead
+  stream falls back without changing the queue.
+- **Stream-safe mode** is a player setting. While it's on:
+  - Adding an untagged Recording is rejected (API error `stream_safe_violation`).
+  - Autoplay picks only stream-safe Recordings. The tag lives on library items, so in practice
+    autoplay draws from the library alone in this mode.
+
+Storage:
+- SQLite (`better-sqlite3`) with FTS5 over title, artist and album.
+- Vector similarity via `sqlite-vec`, or brute-force cosine search in memory, which is fine at 10k
+  tracks.
+- `music-metadata` reads tags. `@parcel/watcher` watches folders on Linux and Windows.
+- The first scan runs in a worker thread with progress shown in the UI; later scans are
+  incremental (mtime + size).
+
+## 4. YouTube Music provider
+
+**Search:** `youtubei.js` music search filtered to songs. When a YouTube *video* link comes in,
+it's converted to the matching song (§5).
+
+**Auth:** an in-app Google sign-in on a persistent session partition. The cookies feed
+`youtubei.js`, and the hidden window shares the same partition, so Premium applies to both
+engines.
+
+**Engine 1: direct.** `youtubei.js` player data, plus a PO token (`bgutils-js`), plus SABR/UMP
+handling (`googlevideo`). The stream service serves the result as a plain byte stream behind
+`track://`. Ads don't apply on this path because we fetch the audio stream ourselves.
+
+**Engine 2: hidden window.** music.youtube.com in a hidden `BrowserWindow`. Its job is to load a
+videoId, play it, and report position and end-of-track. Its output goes to the same selected
+device. Crossfade between the engines uses timed gain ramps over IPC.
+- Ad blocking is on the Planned TODO list, not the MVP. With Premium, the fallback plays no ads.
+- Without Premium, ads can play in this engine, so it must detect YTM's ad state and report it as
+  `ad`, not as song progress. The queue, overlay and API then never show an ad as the track.
+
+**Engine selection:**
+- Try direct streaming. On failure (setup error, stall, HTTP error), switch to the fallback within
+  the same track and resume at the same position.
+- After 3 direct failures in a row, a circuit breaker routes straight to the fallback for 30
+  minutes, then tries direct again. This avoids paying the failure delay on every song while
+  direct is broken.
+
+**Prefetch cache:**
+- Once the current track starts, prefetch the next cloud track in the queue to an LRU disk cache.
+- Prefetching via the direct engine only; the fallback engine can't prefetch.
+- This hides network blips. The analysis worker also uses the cached file.
+
+**Health indicator:**
+- Each track shows an engine badge: `local`, `cache`, `direct` or `fallback`.
+- A footer status dot:
+  - green: direct streaming is working;
+  - amber: the fallback was used recently;
+  - red: the circuit breaker is open.
+- Its tooltip reads "Direct streaming is failing; check for an update" and shows the last error.
+- The same information is available as `GET /health` and a `health.changed` event.
+
+**Stream self-test (supports fast fixes):**
+- `pnpm test:stream` runs the direct engine against a small, fixed set of videoIds and reports
+  what failed at which step (player data, PO token, decipher, SABR).
+- Run in CI on a schedule, a failure opens an issue with that output. An agent picking up the issue
+  has a reproducible failure and a clear definition of "fixed".
+- This is a canary, not a decision gate.
+
+## 5. Link resolver
+
+Pipeline: **parse, then fetch metadata, then normalize, then match against the library, then match
+against YTM, then score.**
+
+| Input | Metadata (self-contained) |
+|---|---|
+| YTM `music.youtube.com/watch?v=` | videoId directly. A music *video* is mapped to its song counterpart |
+| YouTube `youtube.com/watch`, `youtu.be` | same as above. With no counterpart, search YTM songs using title, artist and duration |
+| Spotify `open.spotify.com/track/…` | public page meta tags (title, artist, duration). Optional Spotify API client credentials add the ISRC |
+| Tidal `tidal.com/…/track/…` | public page meta tags |
+| Apple Music `music.apple.com/…?i=` | iTunes Lookup API (no key) |
+| Anything with title + artist but no ISRC | Deezer public API (no key) to fill in the ISRC |
+
+Matching:
+1. **ISRC exact match**, against the library and then YTM.
+2. **Fuzzy match.** Normalize first: strip "(Official Video)", "Remastered 2011" and "feat. X", and
+   fold case and accents. Then score artist and title with Jaro-Winkler, requiring the duration
+   within ±3 s.
+3. **A confidence threshold decides the outcome.** Above it, the song is enqueued. Below it, the
+   API returns the candidates (§6), so a wrong song never plays silently.
+4. **Odesli/song.link** is used only when steps 1–3 find nothing. It can be disabled in settings.
+5. Resolutions are cached by URL.
+
+## 6. API
+
+The API is designed for this app from the ground up. It's an HTTP JSON API with a
+Server-Sent Events stream, and its OpenAPI 3.1 document is generated from the same zod schemas
+the domain layer uses (Hono + `@hono/zod-openapi`, with interactive docs served by the app).
+
+**Conventions:**
+- Resource-oriented URLs.
+- Queue items are addressed by **stable IDs, never by index**, because a bot and the UI editing
+  the queue at the same time would otherwise move the wrong item.
+- The queue carries a `revision` number; mutations accept an `If-Match` header for optimistic
+  concurrency.
+- Errors use RFC 9457 `application/problem+json` with machine-readable `type` codes:
+  `stream_safe_violation`, `match_ambiguous`, `not_found`, `provider_unavailable`.
+- List endpoints use cursor pagination.
+- The `/v1` path prefix exists only for future breaking changes.
+
+**Resources (sketch):**
+
+| Method & path | Purpose |
+|---|---|
+| `GET /v1/player` | state: track, position, playing, volume, engine, repeat, shuffle |
+| `PATCH /v1/player` | set playing, volume, position, repeat, shuffle |
+| `POST /v1/player/next` · `/previous` | transport |
+| `GET /v1/queue` | items + revision |
+| `POST /v1/queue/items` | `{ input: url \| query \| recordingId, position: next \| end \| {after: itemId}, requestedBy? }`. Resolves and enqueues in one call. `201` on success, `409 stream_safe_violation`, `422 match_ambiguous` with candidates |
+| `PATCH /v1/queue/items/{id}` | move or pin a source |
+| `DELETE /v1/queue/items/{id}` · `DELETE /v1/queue/items` | remove or clear |
+| `GET /v1/search?q=&scope=library\|ytm\|all` | unified results; each carries `recordingId` (or a provider ref) and its available sources |
+| `POST /v1/resolve` | link to a match or candidates, without enqueueing |
+| `GET /v1/library/recordings` · `PATCH /v1/library/recordings/{id}` | browse; add or remove from library; set `stream_safe` and tags (with a bulk variant) |
+| `GET /v1/artwork/{recordingId}?size=` | album art: art embedded in local files is extracted at scan time, YTM thumbnails are proxied and resized. Cached either way |
+| `GET /v1/health` | engine status, last errors, scan progress |
+| `GET /v1/settings` · `PATCH /v1/settings` | stream-safe mode, autoplay options, and more |
+| `GET /v1/events` | SSE: `player.changed`, `track.changed`, `queue.changed`, `library.changed`, `health.changed` |
+
+**Why SSE over WebSocket:**
+- The event stream only flows one way, and commands go over REST.
+- SSE is plain HTTP, so the same auth middleware applies.
+- `Last-Event-ID` gives resume-after-reconnect for free.
+- Any bot language can consume it.
+
+**Auth:**
+- Named bearer tokens created and revoked in Settings.
+- Each token has **scopes**: `read`, `player:control`, `queue:add`, `queue:manage`,
+  `library:write`, `admin`, `overlay`.
+- Each token has an optional rate limit. A future Twitch chat bridge gets `queue:add` only.
+- **Overlay tokens:** OBS Browser Sources and `EventSource` can't send auth headers.
+  - The API accepts a `?token=` query parameter, but **only for `overlay`-scoped tokens**.
+  - An overlay token can read player state, the current track and artwork, and nothing else.
+  - It ends up stored in OBS scene files, so it must be harmless if leaked.
+
+**Network:**
+- The server binds to `127.0.0.1` by default; the bot runs on the same machine for now.
+- The bot will later move to a network server, so remote access is designed in from the start,
+  not added later:
+  - a bind address setting;
+  - TLS (cert/key paths, or a generated self-signed cert with its fingerprint shown in Settings);
+  - tokens that are never sent over plain HTTP to non-loopback addresses unless explicitly
+    allowed;
+  - every token is scoped from day one, so the remote bot's token can be limited to what it needs.
+
+## 7. Autoplay (similar-song continuation)
+
+Setting: **autoplay on by default.** When the queue drops below N items (default 2), the
+recommender appends songs similar to what's playing. Options include the following:
+- Sources to draw from: library only, or library + YTM.
+- An adventurousness slider.
+- An artist-repeat window.
+
+It follows the usual two-stage recommender pattern: **generate candidates, then re-rank.**
+
+**Candidate generation:**
+- Library neighbours of the current track and the last few tracks, by audio-embedding similarity.
+- YTM's own radio/up-next for the current song (cloud; skipped in stream-safe mode).
+- Same artists and related artists (ListenBrainz similar-artist data, an open dataset; optional).
+- YTM radio results also supply YTM's rank for each candidate; see "Tracks without features"
+  below.
+
+**Re-ranking:** a weighted score.
+- Embedding cosine similarity (overall timbre and style).
+- Tempo closeness, allowing half and double time.
+- Harmonic compatibility on the **Camelot wheel**: same key, ±1, or relative major/minor. This is
+  the standard rule DJs use for smooth key transitions.
+- Energy and loudness continuity.
+- Genre and tag overlap.
+
+**Constraints:**
+- Stream-safe filter when the mode is on.
+- No repeat of an artist within the last K tracks.
+- Nothing played in the last X hours.
+- A little randomness (sampling from the top-k rather than taking the top-1), so it doesn't loop
+  the same path.
+
+**Audio analysis:** **Essentia** (AGPLv3, combinable with GPLv3) with its pretrained models:
+Discogs-EffNet embeddings plus genre and mood classifiers. It gives BPM, key, loudness, embeddings
+and genres.
+- It runs as a sidecar process (Python wheel or native CLI) in a background queue.
+- **Sources of audio:** local files (analyzed during scanning) and the prefetch cache. There's no
+  separate download for analysis, so a cloud track is analyzed only after it has been cached
+  (played or prefetched).
+- Results are stored in `Features` with an analyzer `version`, so a better model can re-analyze
+  later.
+
+**Tracks without features** (uncached cloud tracks, or local tracks not yet analyzed) are still
+eligible. They're scored from what's known without audio:
+- **YTM's ranking.** A candidate's position in YTM's radio/up-next for the current or recent
+  tracks becomes a similarity score, so YTM's recommender stands in for our audio comparison.
+- Metadata: artist and related-artist overlap, genre tags, release year.
+
+Each source of evidence carries a confidence weight, so analyzed and unanalyzed candidates rank
+on one scale. Once a track is played or prefetched, it's analyzed, and later rankings use its real
+features.
+
+## 8. OBS now-playing overlay (hardcoded layout)
+
+A single page served by the API server at `/overlay/now-playing?token=<overlay token>`. It's added
+to OBS as a **Browser Source**. The background is transparent and the layout fills whatever size
+the source is set to. Recommended size: 800×120.
+
+**Layout:**
+
+```
+┌──────────┬───────────────────────────────────────────┐
+│          │  Artist                                   │
+│   art    │  Song Title                               │
+│          │                                           │
+├──────────┴───────────────────────────────────────────┤
+█████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ← progress bar
+```
+
+- **Progress bar:** the full width of the source, along the bottom edge.
+- **Album art:** a square pushed all the way left. It fills the height from the top of the source
+  to the top of the bar.
+- **Text:** two rows to the right of the art, vertically centered above the bar.
+  - Row 1 is **Artist**; multiple artists are joined with ", ".
+  - Row 2 is **Song Title**.
+  - Each row is a single line, cut off with an ellipsis if too long.
+  - Font size scales with the source height.
+
+**Behaviour:**
+- **Data:** on load the page fetches `GET /v1/player`, then subscribes to `/v1/events` for
+  `player.changed` and `track.changed`. If the connection drops, it reconnects and fetches the
+  state again.
+- **Progress:** events carry `positionMs` plus a timestamp, and the page moves the bar forward
+  locally between events. It stays smooth with no per-frame events, and resyncs on every event
+  (seeks included).
+- **Paused:** the bar freezes and the overlay stays visible.
+- **Track change:** art and text cross-fade (about 300 ms).
+- **Nothing playing, or a fallback-engine ad:** the whole overlay fades out.
+- **Missing art:** a neutral placeholder.
+
+**Restyling without an editor:**
+- Elements have stable class names, and colours, fonts and sizes are CSS custom properties
+  (`--hl-font`, `--hl-text-color`, `--hl-bar-color`, `--hl-bar-track-color`, `--hl-bar-height`,
+  `--hl-gap`).
+- OBS's Browser Source has a **Custom CSS** field, so these can be overridden per scene without
+  touching Halocline.
+
+**Settings → Overlay:** a "Copy overlay URL" button. It creates the `overlay` token on first use,
+copies the URL, and shows the recommended size.
+
+**Extension points** (used by the API and overlay now, and by the planned integrations later):
+integrations attach to internal hooks, so adding one doesn't touch core code.
+- Lifecycle: `onTrackChange`, `onPlayerChange`, `onQueueChange`.
+- `registerRoutes(scope)`.
+- A zod settings schema, from which the settings UI is generated.
+- Not a public third-party plugin system in v1.
+
+## 9. Licensing
+
+- The project is **GPLv3**.
+- Pear Desktop is MIT. Any reused file keeps its MIT copyright and permission notice; a
+  `THIRD_PARTY_NOTICES` file lists each one. MIT code may be included in a GPLv3 work.
+- Dependencies must be GPLv3-compatible:
+  - MIT, BSD, ISC and Apache-2.0 are fine.
+  - MPL-2.0 (the ghostery adblocker, once the planned ad blocking is built) is fine.
+  - AGPLv3 (Essentia) is combinable with GPLv3.
+- CI runs a license checker that fails on anything incompatible.
+
+## 10. Phases
+
+No decision gates. Both YTM engines are in scope from the start.
+
+**Phase 1: core.**
+- Domain layer and SQLite schema.
+- Library scanner and watcher, FTS search.
+- Queue service (persisted, survives restart).
+- Two-deck player renderer and output device selection.
+- Minimal UI: search, queue with drag reorder, now playing, settings.
+- The API skeleton (auth, tokens/scopes, player, queue, search, SSE) built alongside the UI, so
+  every feature lands in both from day one.
+
+**Phase 2: YTM.**
+- Sign-in.
+- Song search.
+- **Both engines**, with in-track failover and the circuit breaker.
+- Prefetch cache.
+- Health indicator.
+- Ad-state detection in the fallback engine.
+- `test:stream` canary in scheduled CI.
+
+**Phase 3: library superset and stream-safe.**
+- Add cloud tracks to the library.
+- Merge Recordings across sources.
+- Bulk stream-safe tagging.
+- Stream-safe mode enforced in the API and the queue.
+- Source pinning.
+
+**Phase 4: link resolver.**
+- Parsers and metadata fetchers.
+- Matcher and the candidate flow.
+- Odesli fallback.
+- Resolution cache.
+
+**Phase 5: autoplay.**
+- Analysis sidecar.
+- Features store.
+- Candidate generation and re-ranking.
+- Settings.
+
+**Phase 6: OBS overlay.**
+- The artwork endpoint, `overlay` tokens, the now-playing page and the Settings → Overlay panel.
+- It depends only on Phases 1–2 (player events and the YTM thumbnails), so it can move earlier if
+  you want it on stream sooner.
+
+**Packaging, throughout:**
+- Linux: AppImage + `.deb` as the primary targets.
+- Windows: NSIS installer, built and smoke-tested in CI from Phase 1.
+
+## 11. Planned TODO (post-MVP)
+
+**Pear-parity integrations.** These are fresh implementations unless reuse is clearly better.
+Each attaches through the §8 extension points.
+- **Ad blocking:** only needed on the hidden YTM window's session. Use
+  `@ghostery/adblocker-electron` because it's the right tool, not because Pear uses it.
+- **SponsorBlock:** fetch `music_offtopic` segments for YTM tracks (privacy-preserving hash-prefix
+  lookup) and skip them in either engine. It doesn't apply to local files.
+- **Tuna (OBS):** POST now-playing JSON to the Tuna OBS plugin's local web server, for existing
+  Tuna-based scenes. The built-in overlay covers new setups.
+- **Synced lyrics:**
+  - Local first: embedded `SYLT`/`USLT` tags or a sidecar `.lrc` file.
+  - Then LRCLIB (open, free).
+  - Then YTM's own lyrics for cloud tracks.
+  - Pear's provider code is worth reading for edge cases (time offsets, romanization); reuse
+    selectively.
+- **Discord Rich Presence:** via `@xhayper/discord-rpc`. Shows the track, artist, artwork and
+  elapsed time.
+- **Media controls polish:** full MPRIS (Linux) and SMTC (Windows) beyond Electron's built-in
+  `mediaSession`.
+
+**Overlay builder (WYSIWYG editor):** a staged path, where each stage reuses the previous one.
+1. **Widget library:** each element (art, title, artist, progress, current lyric line, up next,
+   requester) at its own URL, with OBS handling layout.
+2. **Template customizer:** a few full layouts, edited through a property panel with a live
+   preview using sample data.
+3. **Full editor:**
+   - Overlays stored as JSON documents, drawn by one shared component in both the editor and OBS,
+     so the editor can't drift from what OBS shows.
+   - Built on plain HTML/CSS, with Moveable/Selecto for drag, resize, snapping and selection.
+   - Elements bound to data fields, with conditional visibility and track-change animations.
+   - Undo/redo and import/export.
+4. **Visualizer widget:** needs frequency data streamed from Halocline over WebSocket.
+
+**Other:**
+- Twitch chat song requests (`!sr <link|query>`): built on a `queue:add`-scoped token, with
+  per-user limits, mod approval, vote-to-skip, and stream-safe enforcement.
+- More providers: SoundCloud, Bandcamp, Subsonic/Navidrome, Tidal, Deezer.
+- A web remote UI served by the API.
+- EQ, compressor and visualizer, as inserts in the existing audio graph.
