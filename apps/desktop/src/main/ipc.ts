@@ -8,7 +8,6 @@ import {
   type Core,
 } from '@halocline/core'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { basename, extname } from 'node:path'
 import { z } from 'zod'
 import { IPC, type IpcChannel, type IpcHandlers, type IpcResult } from '../shared/ipc'
 
@@ -16,32 +15,35 @@ type Handler<C extends IpcChannel> = (
   args: unknown,
 ) => ReturnType<IpcHandlers[C]> | Promise<ReturnType<IpcHandlers[C]>>
 
-const AUDIO_EXTENSIONS = ['mp3', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'wav']
-
 /** Wires UI requests to the same core services the HTTP API uses. */
 export function registerIpc(core: Core, apiUrl: () => string | null): void {
   const handlers: { [C in IpcChannel]: Handler<C> } = {
     'library.search': (a) => core.library.search(z.object({ q: z.string() }).parse(a).q),
-    // Stand-in until the scanner lands: one recording per file, titled by filename.
-    'library.addFiles': async () => {
+    'library.addFolder': async () => {
       const window = BrowserWindow.getFocusedWindow()
       const options: Electron.OpenDialogOptions = {
-        properties: ['openFile', 'multiSelections'],
-        filters: [{ name: 'Audio', extensions: AUDIO_EXTENSIONS }],
+        title: 'Add a music folder',
+        properties: ['openDirectory'],
       }
       const { filePaths } = window
         ? await dialog.showOpenDialog(window, options)
         : await dialog.showOpenDialog(options)
-      return filePaths.map((path) => {
-        const recording = core.library.create({
-          title: basename(path, extname(path)),
-          artists: [],
-          inLibrary: true,
-        })
-        core.library.addSource(recording.id, { kind: 'local', locator: path })
-        return recording
-      })
+      const folders = core.settings.get().library.folders
+      const added = filePaths.filter((f) => !folders.includes(f))
+      return added.length
+        ? core.settings.patch({ library: { folders: [...folders, ...added] } })
+        : core.settings.get()
     },
+    'library.removeFolder': (a) => {
+      const { folder } = z.object({ folder: z.string() }).parse(a)
+      const folders = core.settings.get().library.folders.filter((f) => f !== folder)
+      return core.settings.patch({ library: { folders } })
+    },
+    'library.rescan': (a) => {
+      const { full } = z.object({ full: z.boolean().optional() }).parse(a ?? {})
+      void core.scanner.scan({ full: full ?? false })
+    },
+    'scan.status': () => core.scanner.status(),
     'queue.list': () => core.queue.list(),
     'queue.add': (a) => {
       const { recordingId, position } = z

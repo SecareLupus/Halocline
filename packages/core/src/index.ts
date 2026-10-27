@@ -1,8 +1,11 @@
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { openDatabase, type Db } from './db'
 import { EventBus } from './events'
 import { HealthService } from './services/health'
 import { LibraryService } from './services/library'
 import { PlayerService } from './services/player'
+import { LibraryScanner, type ScannerOptions } from './services/scanner'
 import { QueueService } from './services/queue'
 import { SettingsService } from './services/settings'
 import { TokenService } from './services/tokens'
@@ -11,7 +14,14 @@ export * from './errors'
 export * from './events'
 export * from './schemas'
 export { openDatabase, type Db } from './db'
-export { toFtsQuery, LibraryService } from './services/library'
+export {
+  toFtsQuery,
+  LibraryService,
+  type LocalFile,
+  type RecordingUpdate,
+} from './services/library'
+export { LibraryScanner, type ScannerOptions } from './services/scanner'
+export type { ScanInput, ScanMessage, ScanRunner, ScannedFile } from './scan/types'
 export { HealthService } from './services/health'
 export { PlayerService, type PlayerCommand, type PlayerReport } from './services/player'
 export { QueueService, type AddToQueue } from './services/queue'
@@ -29,11 +39,13 @@ export interface Core {
   settings: SettingsService
   tokens: TokenService
   health: HealthService
-  close(): void
+  scanner: LibraryScanner
+  /** Stops the scanner and watchers, then closes the database. */
+  close(): Promise<void>
 }
 
 /** Wires up the domain layer. Both the IPC adapter and the HTTP API sit on top of this. */
-export function createCore(options: { dbPath: string }): Core {
+export function createCore(options: { dbPath: string; scanner?: Partial<ScannerOptions> }): Core {
   const db = openDatabase(options.dbPath)
   const events = new EventBus()
   const settings = new SettingsService(db, events)
@@ -42,6 +54,14 @@ export function createCore(options: { dbPath: string }): Core {
   const health = new HealthService(events)
   const player = new PlayerService(queue, library, health, events)
   const tokens = new TokenService(db)
+  const defaultArtworkDir =
+    options.dbPath === ':memory:'
+      ? join(tmpdir(), 'halocline-artwork')
+      : join(dirname(options.dbPath), 'artwork')
+  const scanner = new LibraryScanner(library, settings, events, {
+    artworkDir: defaultArtworkDir,
+    ...options.scanner,
+  })
   return {
     db,
     events,
@@ -51,6 +71,10 @@ export function createCore(options: { dbPath: string }): Core {
     settings,
     tokens,
     health,
-    close: () => db.close(),
+    scanner,
+    close: async () => {
+      await scanner.stop()
+      db.close()
+    },
   }
 }

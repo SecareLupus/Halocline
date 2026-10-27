@@ -135,6 +135,12 @@ export const Settings = z.object({
       port: z.number().int().min(1).max(65535).default(17380),
     })
     .prefault({}),
+  library: z
+    .object({
+      /** Folders scanned and watched for local music. */
+      folders: z.array(z.string().min(1)).default([]),
+    })
+    .prefault({}),
 })
 export type Settings = z.infer<typeof Settings>
 
@@ -143,6 +149,7 @@ export const SettingsPatch = z
     streamSafeMode: z.boolean(),
     autoplay: Settings.shape.autoplay.unwrap().partial(),
     api: Settings.shape.api.unwrap().partial(),
+    library: Settings.shape.library.unwrap().partial(),
   })
   .partial()
   .strict()
@@ -162,6 +169,22 @@ export const Health = z.object({
   lastFallbackAt: z.number().int().nullable(),
 })
 export type Health = z.infer<typeof Health>
+
+export const ScanStatus = z.object({
+  state: z.enum(['idle', 'scanning']),
+  /** `walking` lists files; `reading` parses tags of new or changed files. */
+  phase: z.enum(['walking', 'reading']).nullable(),
+  found: z.number().int().nonnegative(),
+  processed: z.number().int().nonnegative(),
+  added: z.number().int().nonnegative(),
+  updated: z.number().int().nonnegative(),
+  missing: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  startedAt: z.number().int().nullable(),
+  finishedAt: z.number().int().nullable(),
+  lastError: z.string().nullable(),
+})
+export type ScanStatus = z.infer<typeof ScanStatus>
 
 export const Scope = z.enum([
   'read',

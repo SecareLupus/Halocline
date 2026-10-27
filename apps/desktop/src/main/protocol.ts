@@ -1,17 +1,29 @@
 import type { Core } from '@halocline/core'
 import { net, protocol } from 'electron'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 export const TRACK_SCHEME = 'track'
+export const ARTWORK_SCHEME = 'artwork'
 
 /** Must run before `app.ready`. */
-export function registerTrackScheme(): void {
+export function registerSchemes(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: TRACK_SCHEME,
       privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true },
     },
+    { scheme: ARTWORK_SCHEME, privileges: { standard: true, secure: true } },
   ])
+}
+
+/** `artwork://<file>` serves cover art the scanner extracted, named by content hash. */
+export function handleArtworkProtocol(artworkDir: string): void {
+  protocol.handle(ARTWORK_SCHEME, (request) => {
+    const name = new URL(request.url).hostname
+    if (!/^[0-9a-f]{40}\.[a-z]+$/.test(name)) return new Response('Bad name', { status: 400 })
+    return net.fetch(pathToFileURL(join(artworkDir, name)).toString())
+  })
 }
 
 /**

@@ -1,7 +1,9 @@
-import { Health, Settings, SettingsPatch, type Core } from '@halocline/core'
+import { Health, ScanStatus, Settings, SettingsPatch, type Core } from '@halocline/core'
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import { requireScope, type ApiEnv } from '../auth'
 import { authErrors } from '../problem'
+
+const HealthReport = Health.extend({ scan: ScanStatus })
 
 export function registerSystem(app: OpenAPIHono<ApiEnv>, core: Core) {
   app.openapi(
@@ -9,14 +11,14 @@ export function registerSystem(app: OpenAPIHono<ApiEnv>, core: Core) {
       method: 'get',
       path: '/v1/health',
       tags: ['system'],
-      summary: 'Streaming engine health',
+      summary: 'Streaming engine health and library scan progress',
       middleware: [requireScope('read')],
       responses: {
-        200: { description: 'Health', content: { 'application/json': { schema: Health } } },
+        200: { description: 'Health', content: { 'application/json': { schema: HealthReport } } },
         ...authErrors,
       },
     }),
-    (c) => c.json(core.health.get(), 200),
+    (c) => c.json({ ...core.health.get(), scan: core.scanner.status() }, 200),
   )
 
   app.openapi(

@@ -4,8 +4,9 @@ A desktop music player for live streaming. Local files and YouTube Music share o
 and everything the UI can do is also available over an HTTP API with a live event stream, so
 stream bots can drive it.
 
-> **Status: early skeleton.** Local playback, the queue, library search and the API work.
-> YouTube Music, the scanner, the link resolver, autoplay and the OBS overlay are still to come.
+> **Status: early skeleton.** Local playback, the queue, the library scanner (tags, cover art,
+> folder watching), search and the API work. YouTube Music, the link resolver, autoplay and the
+> OBS overlay are still to come.
 > See [PLAN.md](PLAN.md) for the design and roadmap.
 
 Targets Linux (Ubuntu) first, then Windows.

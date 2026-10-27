@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { sep } from 'node:path'
 import type { Db } from '../db'
 import { DomainError } from '../errors'
 import type { EventBus } from '../events'
@@ -30,7 +32,54 @@ interface SourceRow {
   available: number
   failure_count: number
   last_checked: string | null
+  mtime_ms: number | null
+  size: number | null
 }
+
+/** A local file's tags and stats, as produced by the scanner. */
+export interface LocalFile {
+  path: string
+  mtimeMs: number
+  size: number
+  title: string
+  artists: string[]
+  album: string | null
+  durationMs: number | null
+  isrc: string | null
+  artwork: string | null
+  format: string | null
+  bitrate: number | null
+}
+
+export type RecordingUpdate = Partial<
+  Pick<
+    Recording,
+    | 'title'
+    | 'artists'
+    | 'album'
+    | 'durationMs'
+    | 'isrc'
+    | 'artwork'
+    | 'inLibrary'
+    | 'streamSafe'
+    | 'tags'
+  >
+>
+
+const COLUMNS: Record<keyof RecordingUpdate, string> = {
+  title: 'title',
+  artists: 'artists',
+  album: 'album',
+  durationMs: 'duration_ms',
+  isrc: 'isrc',
+  artwork: 'artwork',
+  inLibrary: 'in_library',
+  streamSafe: 'stream_safe',
+  tags: 'tags',
+}
+
+const toColumnValue = (value: unknown) =>
+  Array.isArray(value) ? JSON.stringify(value) : typeof value === 'boolean' ? Number(value) : value
 
 const toRecording = (r: RecordingRow): Recording => ({
   id: r.id,
@@ -74,6 +123,13 @@ export class LibraryService {
   ) {}
 
   create(input: NewRecording): Recording {
+    const id = this.insert(input)
+    this.notifyChanged([id])
+    return this.require(id)
+  }
+
+  /** Inserts without publishing `library.changed`; batch writers call `notifyChanged` once. */
+  insert(input: NewRecording): string {
     const r = NewRecording.parse(input)
     const id = randomUUID()
     this.db
@@ -95,8 +151,31 @@ export class LibraryService {
         JSON.stringify(r.tags ?? []),
         new Date().toISOString(),
       )
-    this.events.publish({ type: 'library.changed', data: { recordingIds: [id] } })
-    return this.require(id)
+    return id
+  }
+
+  update(id: string, changes: RecordingUpdate): void {
+    const entries = Object.entries(changes).filter(([, v]) => v !== undefined)
+    if (!entries.length) return
+    const sets = entries.map(([k]) => `${COLUMNS[k as keyof RecordingUpdate]} = ?`).join(', ')
+    this.db
+      .prepare(`UPDATE recordings SET ${sets} WHERE id = ?`)
+      .run(...entries.map(([, v]) => toColumnValue(v)), id)
+  }
+
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)()
+  }
+
+  notifyChanged(recordingIds: string[]): void {
+    if (recordingIds.length)
+      this.events.publish({ type: 'library.changed', data: { recordingIds } })
+  }
+
+  findByIsrc(isrc: string): Recording | undefined {
+    const row = this.db.prepare('SELECT * FROM recordings WHERE isrc = ? LIMIT 1').get(isrc) as
+      RecordingRow | undefined
+    return row && toRecording(row)
   }
 
   get(id: string): Recording | undefined {
@@ -145,6 +224,131 @@ export class LibraryService {
       .prepare('SELECT * FROM sources WHERE recording_id = ?')
       .all(recordingId) as SourceRow[]
     return rows.map(toSource)
+  }
+
+  sourceByLocator(kind: SourceKind, locator: string): Source | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM sources WHERE kind = ? AND locator = ?')
+      .get(kind, locator) as SourceRow | undefined
+    return row && toSource(row)
+  }
+
+  /** Available local files with the stats the scanner compares against. */
+  localFiles(): Record<string, { mtimeMs: number; size: number }> {
+    const rows = this.db
+      .prepare(
+        `SELECT locator, mtime_ms, size FROM sources
+         WHERE kind = 'local' AND available = 1 AND mtime_ms IS NOT NULL`,
+      )
+      .all() as Pick<SourceRow, 'locator' | 'mtime_ms' | 'size'>[]
+    return Object.fromEntries(rows.map((r) => [r.locator, { mtimeMs: r.mtime_ms!, size: r.size! }]))
+  }
+
+  /**
+   * Adds or refreshes the local source for a scanned file, creating or updating
+   * its recording. Returns what happened, for scan progress.
+   */
+  saveLocalFile(file: LocalFile): { recordingId: string; outcome: 'added' | 'updated' | 'moved' } {
+    const tags = {
+      title: file.title,
+      artists: file.artists,
+      album: file.album,
+      durationMs: file.durationMs,
+      isrc: file.isrc,
+    }
+    const existing = this.sourceByLocator('local', file.path)
+    if (existing) {
+      this.update(existing.recordingId, { ...tags, ...(file.artwork && { artwork: file.artwork }) })
+      this.upsertLocalSource(existing.recordingId, file)
+      return { recordingId: existing.recordingId, outcome: 'updated' }
+    }
+    const moved = this.findMovedSource(file)
+    if (moved) {
+      this.db.prepare('UPDATE sources SET locator = ? WHERE id = ?').run(file.path, moved.id)
+      this.upsertLocalSource(moved.recordingId, file)
+      return { recordingId: moved.recordingId, outcome: 'moved' }
+    }
+    // Same song already known (e.g. a saved YTM track): attach the file to it.
+    const match = file.isrc ? this.findByIsrc(file.isrc) : undefined
+    if (match) {
+      this.update(match.id, {
+        inLibrary: true,
+        ...(!match.artwork && file.artwork && { artwork: file.artwork }),
+      })
+      this.upsertLocalSource(match.id, file)
+      return { recordingId: match.id, outcome: 'added' }
+    }
+    const recordingId = this.insert({ ...tags, artwork: file.artwork, inLibrary: true })
+    this.upsertLocalSource(recordingId, file)
+    return { recordingId, outcome: 'added' }
+  }
+
+  /**
+   * Marks local files unavailable. Each path may be a file or a folder (everything
+   * under it). Returns the affected recording IDs.
+   */
+  markLocalMissing(paths: string[]): string[] {
+    const find = this.db.prepare(
+      `SELECT id, recording_id FROM sources
+       WHERE kind = 'local' AND available = 1 AND (locator = ? OR substr(locator, 1, ?) = ?)`,
+    )
+    const mark = this.db.prepare('UPDATE sources SET available = 0, last_checked = ? WHERE id = ?')
+    const now = new Date().toISOString()
+    const affected = new Set<string>()
+    for (const path of paths) {
+      // An exact prefix compare: LIKE would be case-insensitive.
+      const prefix = path.endsWith(sep) ? path : path + sep
+      for (const row of find.all(path, prefix.length, prefix) as {
+        id: string
+        recording_id: string
+      }[]) {
+        mark.run(now, row.id)
+        affected.add(row.recording_id)
+      }
+    }
+    return [...affected]
+  }
+
+  private upsertLocalSource(recordingId: string, file: LocalFile): void {
+    this.db
+      .prepare(
+        `INSERT INTO sources (id, recording_id, kind, locator, format, bitrate, mtime_ms, size, last_checked)
+         VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (kind, locator) DO UPDATE SET
+           recording_id = excluded.recording_id, format = excluded.format, bitrate = excluded.bitrate,
+           mtime_ms = excluded.mtime_ms, size = excluded.size, last_checked = excluded.last_checked,
+           available = 1, failure_count = 0`,
+      )
+      .run(
+        randomUUID(),
+        recordingId,
+        file.path,
+        file.format,
+        file.bitrate,
+        file.mtimeMs,
+        file.size,
+        new Date().toISOString(),
+      )
+  }
+
+  /**
+   * A renamed or moved file shows up as a new path. If a local source with the
+   * same size, title and duration points at a file that no longer exists, it's
+   * the same file: relink it so play counts, tags and stream-safe flags survive.
+   */
+  private findMovedSource(file: LocalFile): Source | undefined {
+    const rows = this.db
+      .prepare(
+        `SELECT s.*, r.title AS r_title, r.duration_ms AS r_duration FROM sources s
+         JOIN recordings r ON r.id = s.recording_id
+         WHERE s.kind = 'local' AND s.size = ? AND r.title = ?`,
+      )
+      .all(file.size, file.title) as (SourceRow & { r_title: string; r_duration: number | null })[]
+    const row = rows.find(
+      (r) =>
+        Math.abs((r.r_duration ?? 0) - (file.durationMs ?? 0)) <= 1000 && !existsSync(r.locator),
+    )
+    return row && toSource(row)
   }
 
   source(id: string): Source | undefined {

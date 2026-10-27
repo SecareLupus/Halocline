@@ -17,6 +17,14 @@ export function App() {
     return 'Direct streaming is working'
   }
 
+  const scanLabel = () => {
+    const s = state.scan()
+    if (s?.state !== 'scanning') return null
+    return s.phase === 'reading'
+      ? `Reading tags… ${s.processed} files`
+      : `Scanning library… ${s.found} files found`
+  }
+
   return (
     <div class="app">
       <header class="topbar">
@@ -35,6 +43,9 @@ export function App() {
       <footer class="statusbar">
         <span class={`dot dot-${state.health()?.status ?? 'green'}`} title={healthLabel()} />
         <span>{state.error() ?? healthLabel()}</span>
+        <Show when={scanLabel()}>
+          <span class="badge">{scanLabel()}</span>
+        </Show>
         <Show when={state.settings()?.streamSafeMode}>
           <span class="badge">Stream-safe</span>
         </Show>

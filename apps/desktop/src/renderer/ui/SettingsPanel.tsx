@@ -37,8 +37,60 @@ export function SettingsPanel(props: { state: AppState }) {
         />
         Autoplay similar songs when the queue runs low
       </label>
+      <LibraryFolders state={props.state} />
       <ApiTokens state={props.state} />
     </section>
+  )
+}
+
+function LibraryFolders(props: { state: AppState }) {
+  const folders = () => props.state.settings()?.library.folders ?? []
+  const scanning = () => props.state.scan()?.state === 'scanning'
+  const run = (fn: () => Promise<unknown>) => void props.state.run(fn)
+
+  return (
+    <>
+      <h2>Library folders</h2>
+      <ul class="list">
+        <For each={folders()} fallback={<li class="empty">No folders yet.</li>}>
+          {(folder) => (
+            <li>
+              <code>{folder}</code>
+              <button
+                type="button"
+                onClick={() => run(() => call('library.removeFolder', { folder }))}
+              >
+                Remove
+              </button>
+            </li>
+          )}
+        </For>
+      </ul>
+      <div class="button-row">
+        <button type="button" onClick={() => run(() => call('library.addFolder'))}>
+          Add folder…
+        </button>
+        <button
+          type="button"
+          disabled={scanning()}
+          onClick={() => run(() => call('library.rescan', {}))}
+        >
+          Rescan
+        </button>
+        <button
+          type="button"
+          disabled={scanning()}
+          title="Re-read tags from every file, not just new or changed ones"
+          onClick={() => run(() => call('library.rescan', { full: true }))}
+        >
+          Re-read all tags
+        </button>
+      </div>
+      <p class="empty">
+        Folders are watched for changes. Removing a folder makes its tracks unavailable; their tags
+        and stream-safe flags are kept in case you add it back.
+      </p>
+    </>
   )
 }
 

@@ -21,7 +21,12 @@ export function startApiServer(core: Core): Promise<RunningServer> {
     const server: ServerType = serve({ fetch: app.fetch, hostname: bindAddress, port }, (info) => {
       resolve({
         url: `http://${bindAddress}:${info.port}`,
-        close: () => new Promise((done) => server.close(() => done())),
+        close: () =>
+          new Promise((done) => {
+            server.close(() => done())
+            // Open SSE streams would otherwise hold the server open.
+            if ('closeAllConnections' in server) server.closeAllConnections()
+          }),
       })
     })
   })

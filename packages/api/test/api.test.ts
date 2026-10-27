@@ -182,3 +182,18 @@ describe('openapi', () => {
     )
   })
 })
+
+describe('library', () => {
+  it('starts a scan and reports progress in health', async () => {
+    const res = await call('POST', '/v1/library/scan', {
+      token: tokenFor('library:write'),
+      body: { full: true },
+    })
+    expect(res.status).toBe(202)
+    expect(await json(res)).toMatchObject({ state: 'scanning' })
+    await core.scanner.scan()
+    const health = await json(call('GET', '/v1/health', { token: tokenFor('read') }))
+    expect(health.scan).toMatchObject({ state: 'idle' })
+    expect((await call('POST', '/v1/library/scan', { token: tokenFor('read') })).status).toBe(403)
+  })
+})

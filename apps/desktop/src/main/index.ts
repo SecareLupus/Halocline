@@ -4,16 +4,23 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
 import { registerIpc } from './ipc'
-import { handleTrackProtocol, registerTrackScheme } from './protocol'
+import { handleArtworkProtocol, handleTrackProtocol, registerSchemes } from './protocol'
+import { runScanInWorker } from './scan-runner'
 import { createPlayerWindow, createUiWindow } from './windows'
 
-registerTrackScheme()
+registerSchemes()
 
 if (!app.requestSingleInstanceLock()) app.quit()
 
 app.whenReady().then(async () => {
-  const core = createCore({ dbPath: join(app.getPath('userData'), 'halocline.db') })
+  const userData = app.getPath('userData')
+  const artworkDir = join(userData, 'artwork')
+  const core = createCore({
+    dbPath: join(userData, 'halocline.db'),
+    scanner: { artworkDir, run: runScanInWorker },
+  })
   handleTrackProtocol(core)
+  handleArtworkProtocol(artworkDir)
 
   let api: RunningServer | null = null
   registerIpc(core, () => api?.url ?? null)
@@ -57,8 +64,14 @@ app.whenReady().then(async () => {
   // Closing the UI quits the app; the player window is hidden and shouldn't keep it alive.
   ui.on('closed', () => app.quit())
 
-  app.on('will-quit', () => {
-    void api?.close()
-    core.close()
+  void core.scanner.start()
+
+  // Stop the scanner and API cleanly before the database closes.
+  let shuttingDown = false
+  app.on('will-quit', (event) => {
+    if (shuttingDown) return
+    shuttingDown = true
+    event.preventDefault()
+    void Promise.allSettled([api?.close(), core.close()]).finally(() => app.exit())
   })
 })

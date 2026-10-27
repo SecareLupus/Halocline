@@ -21,6 +21,7 @@
   "dependencies": {
     "@halocline/api": "workspace:*",
     "@halocline/core": "workspace:*",
+    "@parcel/watcher": "^2.6.0",
     "better-sqlite3": "^13.0.3",
     "solid-js": "^1.9.17",
     "zod": "^4.6.7"

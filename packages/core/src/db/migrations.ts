@@ -92,4 +92,9 @@ export const migrations: string[] = [
     value TEXT NOT NULL
   );
   `,
+  /* sql */ `
+  -- Local files: size and mtime let rescans skip files that haven't changed.
+  ALTER TABLE sources ADD COLUMN mtime_ms INTEGER;
+  ALTER TABLE sources ADD COLUMN size INTEGER;
+  `,
 ]

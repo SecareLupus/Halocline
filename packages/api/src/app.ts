@@ -3,6 +3,7 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import { authenticate, type ApiEnv } from './auth'
 import { problem } from './problem'
 import { registerEvents } from './routes/events'
+import { registerLibrary } from './routes/library'
 import { registerPlayer } from './routes/player'
 import { registerQueue } from './routes/queue'
 import { registerSearch } from './routes/search'
@@ -44,6 +45,7 @@ export function createApi(core: Core): OpenAPIHono<ApiEnv> {
   registerPlayer(app, core)
   registerQueue(app, core)
   registerSearch(app, core)
+  registerLibrary(app, core)
   registerSystem(app, core)
   registerEvents(app, core)
   return app

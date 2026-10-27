@@ -12,6 +12,7 @@ import type {
   QueueItem,
   QueuePosition,
   Recording,
+  ScanStatus,
   Scope,
   Settings,
   SettingsPatch,
@@ -20,7 +21,10 @@ import type {
 
 export interface IpcHandlers {
   'library.search': (args: { q: string }) => Recording[]
-  'library.addFiles': () => Recording[]
+  'library.addFolder': () => Settings
+  'library.removeFolder': (args: { folder: string }) => Settings
+  'library.rescan': (args: { full?: boolean }) => void
+  'scan.status': () => ScanStatus
   'queue.list': () => Queue
   'queue.add': (args: { recordingId: string; position?: QueuePosition }) => QueueItem
   'queue.move': (args: { id: string; position: QueuePosition }) => QueueItem
