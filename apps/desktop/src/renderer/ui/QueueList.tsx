@@ -41,7 +41,7 @@ export function QueueList(props: { state: AppState }) {
                   drop(item.id, e.clientY < box.top + box.height / 2)
                 }}
               >
-                <TrackLabel recording={item.recording} />
+                <TrackLabel track={item.recording} />
                 <span class="actions">
                   <Show when={item.origin !== 'user'}>
                     <span class="badge">{item.requestedBy ?? item.origin}</span>

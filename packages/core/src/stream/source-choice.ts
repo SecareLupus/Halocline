@@ -12,9 +12,17 @@ export interface SourceChoice {
  */
 export function chooseSource(
   sources: Source[],
-  opts: { pinnedSourceId?: string | null; cached?: ReadonlySet<string>; directAllowed: boolean },
+  opts: {
+    pinnedSourceId?: string | null
+    cached?: ReadonlySet<string>
+    directAllowed: boolean
+    /** False while no YTM engine exists; YTM sources are then skipped, not tried. */
+    ytmPlayable?: boolean
+  },
 ): SourceChoice | undefined {
-  const usable = sources.filter((s) => s.available)
+  const usable = sources.filter(
+    (s) => s.available && (s.kind !== 'ytm' || opts.ytmPlayable !== false),
+  )
   const pinned = opts.pinnedSourceId && usable.find((s) => s.id === opts.pinnedSourceId)
   const ordered = pinned ? [pinned] : [...usable].sort((a, b) => rank(a) - rank(b))
 

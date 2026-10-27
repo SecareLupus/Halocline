@@ -1,12 +1,4 @@
-import {
-  DomainError,
-  Id,
-  Queue,
-  QueueItem,
-  QueuePosition,
-  Recording,
-  type Core,
-} from '@halocline/core'
+import { DomainError, Id, Queue, QueueItem, QueuePosition, type Core } from '@halocline/core'
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import { requireScope, type ApiEnv } from '../auth'
@@ -15,7 +7,7 @@ import { authErrors, errorResponse } from '../problem'
 const ItemParams = z.object({ id: Id })
 
 const AddItem = z.object({
-  /** A link, a search query, or a recordingId. */
+  /** A recordingId, a `ytm:<videoId>` ref, a music.youtube.com link, or a library query. */
   input: z.string().min(1).max(2000),
   position: QueuePosition.default('end'),
   requestedBy: z.string().max(100).optional(),
@@ -39,28 +31,7 @@ function expectedRevision(c: Context): number | undefined {
   return n
 }
 
-const looksLikeUrl = (s: string) => /^https?:\/\//i.test(s)
-
 export function registerQueue(app: OpenAPIHono<ApiEnv>, core: Core) {
-  /** Turns `input` into a recording: an ID, a library search hit, or (later) a resolved link. */
-  function resolveInput(input: string): Recording {
-    const byId = core.library.get(input)
-    if (byId) return byId
-    if (looksLikeUrl(input)) {
-      throw new DomainError(
-        'not_implemented',
-        'Link resolution arrives with the resolver (PLAN §5)',
-      )
-    }
-    const hits = core.library.search(input, 5)
-    if (hits.length === 1) return hits[0]!
-    if (hits.length === 0)
-      throw new DomainError('not_found', `Nothing in the library matches "${input}"`)
-    throw new DomainError('match_ambiguous', 'More than one recording matches', {
-      candidates: hits,
-    })
-  }
-
   app.openapi(
     createRoute({
       method: 'get',
@@ -100,9 +71,9 @@ export function registerQueue(app: OpenAPIHono<ApiEnv>, core: Core) {
         422: errorResponse('match_ambiguous, with candidates'),
       },
     }),
-    (c) => {
+    async (c) => {
       const body = c.req.valid('json')
-      const recording = resolveInput(body.input)
+      const recording = await core.catalog.resolve(body.input)
       const revision = expectedRevision(c)
       const item = core.queue.add({
         recordingId: recording.id,

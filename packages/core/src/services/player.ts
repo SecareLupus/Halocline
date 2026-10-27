@@ -12,6 +12,7 @@ import type {
 import { chooseSource } from '../stream/source-choice'
 import type { HealthService } from './health'
 import type { LibraryService } from './library'
+import type { YtmCatalog } from '../providers/ytm'
 import type { QueueService } from './queue'
 import type { SettingsService } from './settings'
 
@@ -75,6 +76,7 @@ export class PlayerService {
     private readonly library: LibraryService,
     private readonly settings: SettingsService,
     private readonly health: HealthService,
+    private readonly ytm: YtmCatalog,
     private readonly events: EventBus,
     private readonly now: () => number = Date.now,
   ) {
@@ -291,6 +293,7 @@ export class PlayerService {
     const choice = chooseSource(this.library.sources(item.recordingId), {
       pinnedSourceId: item.pinnedSourceId,
       directAllowed: !forceFallback && this.health.breaker.allowsDirect,
+      ytmPlayable: this.ytm.status().playback,
     })
     if (!choice) return undefined
     return {

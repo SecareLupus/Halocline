@@ -38,6 +38,7 @@ export function SettingsPanel(props: { state: AppState }) {
         Autoplay similar songs when the queue runs low
       </label>
       <OutputAndTransitions state={props.state} />
+      <YouTubeMusic state={props.state} />
       <LibraryFolders state={props.state} />
       <ApiTokens state={props.state} />
     </section>
@@ -93,6 +94,42 @@ function OutputAndTransitions(props: { state: AppState }) {
         />
         Play tracks from the same album gapless, without crossfading
       </label>
+    </>
+  )
+}
+
+function YouTubeMusic(props: { state: AppState }) {
+  const status = () => props.state.ytm()
+  const run = (fn: () => Promise<unknown>) => void props.state.run(fn)
+  return (
+    <>
+      <h2>YouTube Music</h2>
+      <div class="button-row">
+        <span>
+          {status()?.signedIn
+            ? `Signed in${status()?.account ? ` as ${status()?.account}` : ''}`
+            : 'Not signed in. Search works without an account.'}
+        </span>
+        <Show
+          when={status()?.signedIn}
+          fallback={
+            <button type="button" onClick={() => run(() => call('ytm.signIn'))}>
+              Sign in…
+            </button>
+          }
+        >
+          <button type="button" onClick={() => run(() => call('ytm.signOut'))}>
+            Sign out
+          </button>
+        </Show>
+      </div>
+      <Show when={!status()?.playback}>
+        <p class="empty">
+          YouTube Music songs can be searched and queued, but not played yet: no playback engine is
+          available, so they're skipped.
+        </p>
+      </Show>
+      <Show when={status()?.lastError}>{(error) => <p class="warning">{error()}</p>}</Show>
     </>
   )
 }

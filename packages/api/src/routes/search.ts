@@ -1,7 +1,7 @@
-import { Recording, Source, type Core } from '@halocline/core'
+import { SearchResult, type Core } from '@halocline/core'
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import { requireScope, type ApiEnv } from '../auth'
-import { authErrors } from '../problem'
+import { authErrors, errorResponse } from '../problem'
 
 const SearchQuery = z.object({
   q: z.string().min(1).max(200),
@@ -9,7 +9,6 @@ const SearchQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
 })
 
-const SearchResult = z.object({ recording: Recording, sources: z.array(Source) })
 const SearchResults = z.object({ results: z.array(SearchResult) })
 
 export function registerSearch(app: OpenAPIHono<ApiEnv>, core: Core) {
@@ -18,7 +17,9 @@ export function registerSearch(app: OpenAPIHono<ApiEnv>, core: Core) {
       method: 'get',
       path: '/v1/search',
       tags: ['search'],
-      summary: 'Search the library (and, once Phase 2 lands, YouTube Music songs)',
+      summary: 'Search the library and YouTube Music songs',
+      description:
+        'Library results come first. YTM results carry a `ref` to pass as `input` to `POST /v1/queue/items`.',
       middleware: [requireScope('read')],
       request: { query: SearchQuery },
       responses: {
@@ -27,17 +28,12 @@ export function registerSearch(app: OpenAPIHono<ApiEnv>, core: Core) {
           content: { 'application/json': { schema: SearchResults } },
         },
         ...authErrors,
+        503: errorResponse('YouTube Music is unreachable and there were no library results'),
       },
     }),
-    (c) => {
+    async (c) => {
       const { q, scope, limit } = c.req.valid('query')
-      // YTM search is Phase 2; until then every scope searches the library only.
-      const recordings = scope === 'ytm' ? [] : core.library.search(q, limit)
-      const results = recordings.map((recording) => ({
-        recording,
-        sources: core.library.sources(recording.id),
-      }))
-      return c.json({ results }, 200)
+      return c.json({ results: await core.catalog.search(q, scope, limit) }, 200)
     },
   )
 }

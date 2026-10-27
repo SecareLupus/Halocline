@@ -125,6 +125,39 @@ export const BulkResult = z.object({
 })
 export type BulkResult = z.infer<typeof BulkResult>
 
+/** A YouTube Music song as the provider describes it, before it's in the database. */
+export const YtmSong = z.object({
+  videoId: z.string().regex(/^[\w-]{11}$/),
+  title: z.string(),
+  artists: z.array(z.string()),
+  album: z.string().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  artwork: z.url().nullable(),
+})
+export type YtmSong = z.infer<typeof YtmSong>
+
+export const YtmStatus = z.object({
+  signedIn: z.boolean(),
+  /** Account display name, when signed in and YouTube returns one. */
+  account: z.string().nullable(),
+  /** Whether any engine can play YTM songs yet. Search and queueing work regardless. */
+  playback: z.boolean(),
+  lastError: z.string().nullable(),
+})
+export type YtmStatus = z.infer<typeof YtmStatus>
+
+/** Unified search: library hits first, then YTM songs not already in the library. */
+export const SearchResult = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('library'), recording: Recording, sources: z.array(Source) }),
+  z.object({
+    kind: z.literal('ytm'),
+    /** Pass as `input` to POST /v1/queue/items to enqueue it. */
+    ref: z.string(),
+    song: YtmSong,
+  }),
+])
+export type SearchResult = z.infer<typeof SearchResult>
+
 export const QueueOrigin = z.enum(['user', 'api', 'autoplay'])
 export type QueueOrigin = z.infer<typeof QueueOrigin>
 

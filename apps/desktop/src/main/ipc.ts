@@ -7,11 +7,13 @@ import {
   RecordingPatch,
   Scope,
   SettingsPatch,
+  YtmSong,
   type Core,
 } from '@halocline/core'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC, type IpcChannel, type IpcHandlers, type IpcResult } from '../shared/ipc'
+import { openYtmSignIn, signOutYtm } from './ytm-auth'
 
 type Handler<C extends IpcChannel> = (
   args: unknown,
@@ -21,6 +23,26 @@ type Handler<C extends IpcChannel> = (
 export function registerIpc(core: Core, apiUrl: () => string | null): void {
   const handlers: { [C in IpcChannel]: Handler<C> } = {
     'library.search': (a) => core.library.search(z.object({ q: z.string() }).parse(a).q),
+    search: (a) => core.catalog.search(z.object({ q: z.string().min(1).max(200) }).parse(a).q),
+    'queue.addYtm': (a) => {
+      const { song, position } = z
+        .object({ song: YtmSong, position: QueuePosition.optional() })
+        .parse(a)
+      const recording = core.catalog.addYtmSong(song)
+      return core.queue.add({
+        recordingId: recording.id,
+        origin: 'user',
+        ...(position && { position }),
+      })
+    },
+    'ytm.status': () => core.ytm.status(),
+    'ytm.signIn': () => {
+      openYtmSignIn(BrowserWindow.getFocusedWindow() ?? undefined)
+    },
+    'ytm.signOut': async () => {
+      await signOutYtm()
+      await core.ytm.refresh()
+    },
     'library.edit': (a) => {
       const { id, changes } = z.object({ id: Id, changes: RecordingPatch }).parse(a)
       return core.library.edit(id, changes)

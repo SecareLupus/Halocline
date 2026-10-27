@@ -6,7 +6,7 @@ let core: Core
 afterEach(() => core.close())
 
 function setup() {
-  core = testCore()
+  core = testCore({ ytmPlayback: true })
   const sent: PlayerCommand[] = []
   core.player.connect((c) => sent.push(c))
   const enqueue = (title: string, kind: 'local' | 'ytm' = 'local') => {

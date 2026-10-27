@@ -4,6 +4,8 @@ import { openDatabase, type Db } from './db'
 import { EventBus } from './events'
 import { HealthService } from './services/health'
 import { LibraryService } from './services/library'
+import { YtmProvider, type YtmCatalog, type YtmProviderOptions } from './providers/ytm'
+import { CatalogService } from './services/catalog'
 import { PlayerService } from './services/player'
 import { LibraryScanner, type ScannerOptions } from './services/scanner'
 import { QueueService } from './services/queue'
@@ -21,6 +23,13 @@ export {
   type RecordingUpdate,
 } from './services/library'
 export { LibraryScanner, type ScannerOptions } from './services/scanner'
+export { CatalogService, parseYtmRef, type SearchScope } from './services/catalog'
+export {
+  YtmProvider,
+  upscaleArtwork,
+  type YtmCatalog,
+  type YtmProviderOptions,
+} from './providers/ytm'
 export type { ScanInput, ScanMessage, ScanRunner, ScannedFile } from './scan/types'
 export { HealthService } from './services/health'
 export {
@@ -46,19 +55,31 @@ export interface Core {
   tokens: TokenService
   health: HealthService
   scanner: LibraryScanner
+  ytm: YtmCatalog
+  catalog: CatalogService
   /** Stops the scanner and watchers, then closes the database. */
   close(): Promise<void>
 }
 
 /** Wires up the domain layer. Both the IPC adapter and the HTTP API sit on top of this. */
-export function createCore(options: { dbPath: string; scanner?: Partial<ScannerOptions> }): Core {
+export function createCore(options: {
+  dbPath: string
+  scanner?: Partial<ScannerOptions>
+  /** A YTM catalog to use instead of the real provider (tests), or options for it. */
+  ytm?: YtmCatalog | YtmProviderOptions
+}): Core {
   const db = openDatabase(options.dbPath)
   const events = new EventBus()
   const settings = new SettingsService(db, events)
   const library = new LibraryService(db, events)
   const queue = new QueueService(db, library, settings, events)
   const health = new HealthService(events)
-  const player = new PlayerService(queue, library, settings, health, events)
+  const ytm =
+    options.ytm && 'searchSongs' in options.ytm
+      ? options.ytm
+      : new YtmProvider(events, options.ytm ?? {})
+  const catalog = new CatalogService(library, ytm)
+  const player = new PlayerService(queue, library, settings, health, ytm, events)
   const tokens = new TokenService(db)
   const defaultArtworkDir =
     options.dbPath === ':memory:'
@@ -78,6 +99,8 @@ export function createCore(options: { dbPath: string; scanner?: Partial<ScannerO
     tokens,
     health,
     scanner,
+    ytm,
+    catalog,
     close: async () => {
       await scanner.stop()
       db.close()

@@ -7,6 +7,7 @@ import { registerIpc } from './ipc'
 import { handleArtworkProtocol, handleTrackProtocol, registerSchemes } from './protocol'
 import { runScanInWorker } from './scan-runner'
 import { createPlayerWindow, createUiWindow } from './windows'
+import { lockDownYtmSession, watchYtmCookies, ytmCookie } from './ytm-auth'
 
 registerSchemes()
 
@@ -21,7 +22,11 @@ app.whenReady().then(async () => {
   const core = createCore({
     dbPath: join(userData, 'halocline.db'),
     scanner: { artworkDir, run: runScanInWorker },
+    ytm: { cookie: ytmCookie },
   })
+  lockDownYtmSession()
+  watchYtmCookies(() => void core.ytm.refresh())
+  void core.ytm.refresh()
   handleTrackProtocol(core)
   handleArtworkProtocol(artworkDir)
 

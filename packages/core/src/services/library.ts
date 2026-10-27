@@ -17,6 +17,7 @@ import {
   type RecordingDetail,
   type Source,
   type SourceKind,
+  type YtmSong,
 } from '../schemas'
 
 interface RecordingRow {
@@ -250,7 +251,7 @@ export class LibraryService {
     return recording
   }
 
-  /** Full-text search over title, artists and album, best matches first. */
+  /** Full-text search of the library (title, artists, album), best matches first. */
   search(text: string, limit = 25): Recording[] {
     const query = toFtsQuery(text)
     if (!query) return []
@@ -258,12 +259,35 @@ export class LibraryService {
       .prepare(
         `SELECT r.* FROM recordings_fts f
          JOIN recordings r ON r.pk = f.rowid
-         WHERE recordings_fts MATCH ?
+         WHERE recordings_fts MATCH ? AND r.in_library = 1
          ORDER BY bm25(recordings_fts), r.title
          LIMIT ?`,
       )
       .all(query, limit) as RecordingRow[]
     return rows.map(toRecording)
+  }
+
+  /**
+   * The recording for a YTM song, created on first use. It isn't added to the
+   * library: queueing a cloud song doesn't save it (PLAN §3).
+   */
+  ensureYtmSong(song: YtmSong): Recording {
+    const known = this.sourceByLocator('ytm', song.videoId)
+    if (known) return this.require(known.recordingId)
+    const id = this.transaction(() => {
+      const recordingId = this.insert({
+        title: song.title,
+        artists: song.artists,
+        album: song.album,
+        durationMs: song.durationMs,
+        artwork: song.artwork,
+        inLibrary: false,
+      })
+      this.addSource(recordingId, { kind: 'ytm', locator: song.videoId })
+      return recordingId
+    })
+    this.notifyChanged([id])
+    return this.require(id)
   }
 
   /** Pages through recordings with filters, using an opaque keyset cursor. */

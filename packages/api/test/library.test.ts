@@ -1,5 +1,6 @@
 import { createCore, type Core, type Scope } from '@halocline/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { offlineYtm } from './fake-ytm'
 import { createApi } from '../src'
 
 let core: Core
@@ -7,7 +8,7 @@ let app: ReturnType<typeof createApi>
 let clock: number
 
 beforeEach(() => {
-  core = createCore({ dbPath: ':memory:' })
+  core = createCore({ dbPath: ':memory:', ytm: offlineYtm })
   clock = 1_000_000
   app = createApi(core, { now: () => clock })
 })

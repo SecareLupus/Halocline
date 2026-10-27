@@ -14,6 +14,7 @@ export function App() {
     if (!h) return ''
     if (h.status === 'red') return 'Direct streaming is failing; check for an update'
     if (h.status === 'amber') return 'The fallback engine was used recently'
+    if (!state.ytm()?.playback) return 'Local playback only: no YouTube Music engine yet'
     return 'Direct streaming is working'
   }
 

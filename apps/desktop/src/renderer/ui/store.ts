@@ -1,4 +1,12 @@
-import type { Health, OutputState, PlayerState, Queue, ScanStatus, Settings } from '@halocline/core'
+import type {
+  Health,
+  OutputState,
+  PlayerState,
+  Queue,
+  ScanStatus,
+  Settings,
+  YtmStatus,
+} from '@halocline/core'
 import { createSignal, onCleanup } from 'solid-js'
 import { call } from './bridge'
 
@@ -10,6 +18,7 @@ export function createAppState() {
   const [settings, setSettings] = createSignal<Settings | null>(null)
   const [scan, setScan] = createSignal<ScanStatus | null>(null)
   const [output, setOutput] = createSignal<OutputState | null>(null)
+  const [ytm, setYtm] = createSignal<YtmStatus | null>(null)
   const [error, setError] = createSignal<string | null>(null)
   /** Bumped when the library changes, so views can re-run their queries. */
   const [libraryVersion, setLibraryVersion] = createSignal(0)
@@ -20,6 +29,7 @@ export function createAppState() {
   void call('settings.get').then(setSettings)
   void call('scan.status').then(setScan)
   void call('player.output').then(setOutput)
+  void call('ytm.status').then(setYtm)
   void refreshQueue()
 
   const off = window.halocline.onEvent((event) => {
@@ -37,6 +47,8 @@ export function createAppState() {
         return setScan(event.data)
       case 'output.changed':
         return setOutput(event.data)
+      case 'ytm.changed':
+        return setYtm(event.data)
       case 'library.changed':
         return setLibraryVersion((v) => v + 1)
     }
@@ -53,7 +65,7 @@ export function createAppState() {
     }
   }
 
-  return { player, queue, health, settings, scan, output, libraryVersion, error, run }
+  return { player, queue, health, settings, scan, output, ytm, libraryVersion, error, run }
 }
 
 export type AppState = ReturnType<typeof createAppState>

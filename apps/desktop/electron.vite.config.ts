@@ -3,7 +3,8 @@ import { defineConfig } from 'electron-vite'
 import solid from 'vite-plugin-solid'
 
 // Workspace packages ship TypeScript source, so they're bundled, not externalized.
-// Only native modules (better-sqlite3) need to stay in node_modules at runtime.
+// Native modules (better-sqlite3) and youtubei.js, whose fflate dependency declares its
+// own module-scope `require` that clashes with the ESM shim, stay in node_modules.
 const bundleWorkspace = { exclude: ['@halocline/core', '@halocline/api', 'zod'] }
 
 export default defineConfig({

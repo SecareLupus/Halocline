@@ -48,7 +48,7 @@ export function NowPlaying(props: { state: AppState }) {
         when={p()?.current}
         fallback={<span class="art" style={{ width: '48px', height: '48px' }} />}
       >
-        {(c) => <Artwork recording={c().recording} size={48} />}
+        {(c) => <Artwork track={c().recording} size={48} />}
       </Show>
       <div class="current">
         <Show when={p()?.current} fallback={<span class="empty">Nothing playing</span>}>

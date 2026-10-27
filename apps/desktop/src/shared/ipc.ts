@@ -16,14 +16,23 @@ import type {
   Recording,
   RecordingPatch,
   ScanStatus,
+  SearchResult,
   Scope,
   Settings,
   SettingsPatch,
   StampedEvent,
+  YtmSong,
+  YtmStatus,
 } from '@halocline/core'
 
 export interface IpcHandlers {
   'library.search': (args: { q: string }) => Recording[]
+  /** Library first, then YouTube Music songs. */
+  search: (args: { q: string }) => SearchResult[]
+  'queue.addYtm': (args: { song: YtmSong; position?: QueuePosition }) => QueueItem
+  'ytm.status': () => YtmStatus
+  'ytm.signIn': () => void
+  'ytm.signOut': () => void
   'library.edit': (args: { id: string; changes: RecordingPatch }) => Recording
   'library.editMany': (args: { ids: string[]; changes: RecordingPatch }) => BulkResult
   'library.addFolder': () => Settings
