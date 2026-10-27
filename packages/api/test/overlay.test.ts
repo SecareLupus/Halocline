@@ -45,7 +45,7 @@ describe('overlay', () => {
     expect((await get('/v1/overlay', core.tokens.create('r', ['read']).secret)).status).toBe(403)
     const token = admin()
     const first = (await (await get('/v1/overlay', token)).json()) as { url: string }
-    expect(first).toMatchObject({ width: 800, height: 120 })
+    expect(first).toMatchObject({ width: 375, height: 140 })
     expect(first.url).toMatch(/^http:\/\/127\.0\.0\.1:17380\/overlay\/now-playing\?token=hl_/)
     const again = (await (await get('/v1/overlay', token)).json()) as { url: string }
     expect(again.url).toBe(first.url)

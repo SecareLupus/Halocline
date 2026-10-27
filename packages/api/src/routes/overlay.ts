@@ -8,7 +8,7 @@ import nowPlayingHtml from '../overlay/now-playing.html?raw'
 import { authErrors, problem } from '../problem'
 
 /** PLAN §8: the size the layout is designed for. */
-export const OVERLAY_SIZE = { width: 800, height: 120 }
+export const OVERLAY_SIZE = { width: 375, height: 140 }
 
 const OverlayInfo = z
   .object({

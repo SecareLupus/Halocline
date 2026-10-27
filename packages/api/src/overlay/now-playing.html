@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
     <title>Halocline now playing</title>
     <style>
@@ -69,8 +70,11 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        /* Scales with the source height: two rows fit with room to spare. */
-        font-size: calc((100vh - var(--hl-bar-height)) * 0.28);
+        /*
+         * Scales with the source: two rows fit the height, and a narrow source
+         * (375×140 is the recommended size) still fits a useful length of title.
+         */
+        font-size: var(--hl-font-size, min(calc((100vh - var(--hl-bar-height)) * 0.24), 6vw));
         line-height: 1.2;
         text-shadow: var(--hl-text-shadow);
       }
