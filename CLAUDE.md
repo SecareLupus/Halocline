@@ -5,8 +5,10 @@
   git config. Never commit as Claude and never add a Co-Authored-By trailer. The active `gh`
   account on this machine is a work account; use `GH_TOKEN=$(gh auth token --user SecareLupus)`
   for GitHub calls about this repo.
-- `pnpm test` runs Vitest under Electron's Node (`ELECTRON_RUN_AS_NODE`), because
-  `better-sqlite3` is compiled for Electron's ABI. Don't run `vitest` with system Node.
+- `pnpm test` runs Vitest under Electron's Node (`ELECTRON_RUN_AS_NODE`), so tests run on the
+  same runtime as the app. Native modules (`better-sqlite3`, `@parcel/watcher`) load prebuilt
+  N-API binaries, which work in Node and Electron alike: nothing is compiled on install, so don't
+  add install-time native builds (they broke Windows CI).
 - The domain layer (`packages/core`) is the single source of truth. The UI (IPC in
   `apps/desktop/src/main/ipc.ts`) and the HTTP API (`packages/api`) are thin adapters that
   validate with the same zod schemas. A feature lands in both.

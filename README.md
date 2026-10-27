@@ -17,7 +17,7 @@ Requires Node 22.12+ and pnpm 9. Linux also needs a C++ toolchain (`build-essent
 Python 3 to build `better-sqlite3`.
 
 ```bash
-pnpm install      # also rebuilds native modules for Electron
+pnpm install
 pnpm dev          # run the app with hot reload
 pnpm test         # unit tests (run under Electron's Node)
 pnpm lint && pnpm typecheck
@@ -31,7 +31,7 @@ pnpm dist:linux   # AppImage + .deb in apps/desktop/release/
 | `packages/core` | Domain layer: zod schemas, SQLite store, library, queue, player, tokens, health |
 | `packages/api`  | HTTP API (Hono + OpenAPI 3.1) and SSE event stream over the core services       |
 | `apps/desktop`  | Electron app: main process, `track://` protocol, player renderer, Solid UI      |
-| `scripts`       | Native rebuild, Electron-as-Node test runner, licence check                     |
+| `scripts`       | Electron-as-Node test runner, licence check, stream canary issue reporter       |
 
 ### Native modules
 
