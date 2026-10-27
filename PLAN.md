@@ -156,8 +156,8 @@ device. Crossfade between the engines uses timed gain ramps over IPC.
   - A core `EngineRouter` sends each command to the active engine, and loading on one stops the
     other. Reports from the inactive engine are dropped.
   - A load that doesn't start playing within 20 s of song time (ads excluded) reports an error.
-  - Not built yet: the crossfade between engines (a switch is a cut), and handling the EU cookie
-    consent page.
+  - Not built yet: the crossfade between engines (a switch is a cut).
+  - The EU cookie consent page is out of scope: Halocline isn't used in the EU.
 
 **Engine selection:**
 - Try direct streaming. On failure (setup error, stall, HTTP error), switch to the fallback within
