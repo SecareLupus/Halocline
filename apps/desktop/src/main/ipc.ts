@@ -57,6 +57,7 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
     },
     'queue.remove': (a) => core.queue.remove(z.object({ id: Id }).parse(a).id),
     'player.get': () => core.player.get(),
+    'player.output': () => core.player.getOutput(),
     'player.patch': (a) => core.player.patch(PlayerPatch.parse(a)),
     'player.next': () => core.player.next(),
     'player.previous': () => core.player.previous(),

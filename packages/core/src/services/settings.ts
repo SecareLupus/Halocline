@@ -23,6 +23,7 @@ export class SettingsService {
       ...patch,
       autoplay: { ...current.autoplay, ...patch.autoplay },
       api: { ...current.api, ...patch.api },
+      playback: { ...current.playback, ...patch.playback },
       library: { ...current.library, ...patch.library },
     })
     setKv(this.db, KEY, JSON.stringify(next))

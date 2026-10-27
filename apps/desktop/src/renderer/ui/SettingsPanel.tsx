@@ -37,9 +37,63 @@ export function SettingsPanel(props: { state: AppState }) {
         />
         Autoplay similar songs when the queue runs low
       </label>
+      <OutputAndTransitions state={props.state} />
       <LibraryFolders state={props.state} />
       <ApiTokens state={props.state} />
     </section>
+  )
+}
+
+function OutputAndTransitions(props: { state: AppState }) {
+  const playback = () => props.state.settings()?.playback
+  const output = () => props.state.output()
+  const patch = (p: NonNullable<Parameters<typeof call<'settings.patch'>>[1]['playback']>) =>
+    void props.state.run(() => call('settings.patch', { playback: p }))
+  const seconds = () => (playback()?.crossfadeMs ?? 0) / 1000
+
+  return (
+    <>
+      <label class="field">
+        <span>Output device</span>
+        <select
+          value={playback()?.outputDeviceId ?? ''}
+          onChange={(e) => patch({ outputDeviceId: e.currentTarget.value })}
+        >
+          <option value="">System default</option>
+          <For each={output()?.devices}>{(d) => <option value={d.deviceId}>{d.label}</option>}</For>
+          <Show
+            when={
+              playback()?.outputDeviceId &&
+              !output()?.devices.some((d) => d.deviceId === playback()?.outputDeviceId)
+            }
+          >
+            <option value={playback()?.outputDeviceId}>Disconnected device</option>
+          </Show>
+        </select>
+      </label>
+      <Show when={output()?.error}>{(error) => <p class="warning">{error()}</p>}</Show>
+      <label class="field">
+        <span>Crossfade</span>
+        <input
+          type="range"
+          min="0"
+          max="12"
+          step="0.5"
+          value={seconds()}
+          onChange={(e) => patch({ crossfadeMs: Math.round(Number(e.currentTarget.value) * 1000) })}
+        />
+        <span class="value">{seconds() ? `${seconds()} s` : 'Off (gapless)'}</span>
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={playback()?.gaplessAlbums ?? true}
+          disabled={!seconds()}
+          onChange={(e) => patch({ gaplessAlbums: e.currentTarget.checked })}
+        />
+        Play tracks from the same album gapless, without crossfading
+      </label>
+    </>
   )
 }
 

@@ -197,3 +197,22 @@ describe('library', () => {
     expect((await call('POST', '/v1/library/scan', { token: tokenFor('read') })).status).toBe(403)
   })
 })
+
+describe('player output', () => {
+  it('lists output devices reported by the player', async () => {
+    const state = {
+      devices: [{ deviceId: 'sink1', label: 'OBS sink' }],
+      activeDeviceId: 'sink1',
+      error: null,
+    }
+    core.player.report({ type: 'output', state })
+    expect(await json(call('GET', '/v1/player/output', { token: tokenFor('read') }))).toEqual(state)
+    const res = await call('PATCH', '/v1/settings', {
+      token: tokenFor('admin'),
+      body: { playback: { outputDeviceId: 'sink1', crossfadeMs: 3000 } },
+    })
+    expect(await json(res)).toMatchObject({
+      playback: { outputDeviceId: 'sink1', crossfadeMs: 3000, gaplessAlbums: true },
+    })
+  })
+})

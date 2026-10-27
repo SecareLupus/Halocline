@@ -299,3 +299,27 @@ h2 {
   gap: 8px;
   margin: 8px 0;
 }
+
+.field {
+  display: grid !important;
+  grid-template-columns: 120px minmax(0, 280px) auto;
+  gap: 12px;
+}
+
+.field select {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.field .value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.warning {
+  color: var(--amber);
+}

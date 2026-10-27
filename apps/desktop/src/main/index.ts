@@ -1,5 +1,5 @@
 import { startApiServer, type RunningServer } from '@halocline/api'
-import { createCore, type PlayerReport } from '@halocline/core'
+import { createCore, type PlayerCommand, type PlayerReport } from '@halocline/core'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
@@ -10,9 +10,12 @@ import { createPlayerWindow, createUiWindow } from './windows'
 
 registerSchemes()
 
-if (!app.requestSingleInstanceLock()) app.quit()
+// A second launch just focuses the running one (see 'second-instance').
+const isPrimary = app.requestSingleInstanceLock()
+if (!isPrimary) app.quit()
 
 app.whenReady().then(async () => {
+  if (!isPrimary) return
   const userData = app.getPath('userData')
   const artworkDir = join(userData, 'artwork')
   const core = createCore({
@@ -34,14 +37,17 @@ app.whenReady().then(async () => {
   // The player renderer owns the audio; it lives apart from the UI so a UI
   // reload never drops playback (PLAN §2).
   const player = createPlayerWindow()
-  core.player.connect((command) => {
+  const toPlayer = (command: PlayerCommand) => {
     if (command.type === 'load' && command.engine === 'fallback') {
       // The hidden YTM window arrives in Phase 2. Report failure so the player moves on.
       core.player.report({ type: 'error', message: 'Fallback engine not built yet' })
       return
     }
     player.webContents.send(IPC.playerCommand, command)
-  })
+  }
+  // Connect once the page is listening (messages sent earlier are dropped), and
+  // again after any reload, so it always gets the current output and fade settings.
+  player.webContents.on('did-finish-load', () => core.player.connect(toPlayer))
   ipcMain.on(IPC.playerReport, (event, report: PlayerReport) => {
     if (event.sender === player.webContents) core.player.report(report)
   })

@@ -23,7 +23,13 @@ export {
 export { LibraryScanner, type ScannerOptions } from './services/scanner'
 export type { ScanInput, ScanMessage, ScanRunner, ScannedFile } from './scan/types'
 export { HealthService } from './services/health'
-export { PlayerService, type PlayerCommand, type PlayerReport } from './services/player'
+export {
+  PlayerService,
+  type PlayerCommand,
+  type PlayerReport,
+  type TrackLoad,
+} from './services/player'
+export * from './playback'
 export { QueueService, type AddToQueue } from './services/queue'
 export { SettingsService } from './services/settings'
 export { TokenService } from './services/tokens'
@@ -52,7 +58,7 @@ export function createCore(options: { dbPath: string; scanner?: Partial<ScannerO
   const library = new LibraryService(db, events)
   const queue = new QueueService(db, library, settings, events)
   const health = new HealthService(events)
-  const player = new PlayerService(queue, library, health, events)
+  const player = new PlayerService(queue, library, settings, health, events)
   const tokens = new TokenService(db)
   const defaultArtworkDir =
     options.dbPath === ':memory:'

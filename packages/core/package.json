@@ -6,7 +6,8 @@
   "license": "GPL-3.0-or-later",
   "exports": {
     ".": "./src/index.ts",
-    "./scan": "./src/scan/index.ts"
+    "./scan": "./src/scan/index.ts",
+    "./playback": "./src/playback/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."

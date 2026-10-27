@@ -1,4 +1,4 @@
-import { PlayerPatch, PlayerState, type Core } from '@halocline/core'
+import { OutputState, PlayerPatch, PlayerState, type Core } from '@halocline/core'
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import { requireScope, type ApiEnv } from '../auth'
 import { authErrors } from '../problem'
@@ -34,6 +34,26 @@ export function registerPlayer(app: OpenAPIHono<ApiEnv>, core: Core) {
       responses: stateResponse('Updated player state'),
     }),
     (c) => c.json(core.player.patch(c.req.valid('json')), 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/player/output',
+      tags: ['player'],
+      summary: 'Audio output devices and the one in use',
+      description:
+        'Select a device by setting `playback.outputDeviceId` with `PATCH /v1/settings`.',
+      middleware: [requireScope('read')],
+      responses: {
+        200: {
+          description: 'Output state',
+          content: { 'application/json': { schema: OutputState } },
+        },
+        ...authErrors,
+      },
+    }),
+    (c) => c.json(core.player.getOutput(), 200),
   )
 
   for (const action of ['next', 'previous'] as const) {

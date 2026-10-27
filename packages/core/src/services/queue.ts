@@ -125,6 +125,13 @@ export class QueueService {
     })
   }
 
+  /** The first item, without removing it. */
+  peek(): QueueItem | undefined {
+    const row = this.db.prepare('SELECT * FROM queue_items ORDER BY position LIMIT 1').get() as
+      QueueRow | undefined
+    return row && this.toItem(row)
+  }
+
   /** Removes and returns the first item, for the player to start. */
   takeNext(): QueueItem | undefined {
     const row = this.db.prepare('SELECT * FROM queue_items ORDER BY position LIMIT 1').get() as

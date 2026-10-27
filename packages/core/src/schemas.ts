@@ -109,6 +109,18 @@ export const PlayerState = z.object({
 })
 export type PlayerState = z.infer<typeof PlayerState>
 
+export const OutputDevice = z.object({ deviceId: z.string(), label: z.string() })
+export type OutputDevice = z.infer<typeof OutputDevice>
+
+/** Audio outputs the player can see, and the one it's actually using. */
+export const OutputState = z.object({
+  devices: z.array(OutputDevice),
+  /** Empty means the system default. Differs from the setting if that device is missing. */
+  activeDeviceId: z.string(),
+  error: z.string().nullable(),
+})
+export type OutputState = z.infer<typeof OutputState>
+
 export const PlayerPatch = z
   .object({
     playing: z.boolean(),
@@ -135,6 +147,16 @@ export const Settings = z.object({
       port: z.number().int().min(1).max(65535).default(17380),
     })
     .prefault({}),
+  playback: z
+    .object({
+      /** Audio output device ID from the player; empty means the system default. */
+      outputDeviceId: z.string().default(''),
+      /** Crossfade between tracks; 0 means gapless. */
+      crossfadeMs: z.number().int().min(0).max(12_000).default(0),
+      /** Play consecutive tracks from the same album gapless, even with crossfade on. */
+      gaplessAlbums: z.boolean().default(true),
+    })
+    .prefault({}),
   library: z
     .object({
       /** Folders scanned and watched for local music. */
@@ -149,6 +171,7 @@ export const SettingsPatch = z
     streamSafeMode: z.boolean(),
     autoplay: Settings.shape.autoplay.unwrap().partial(),
     api: Settings.shape.api.unwrap().partial(),
+    playback: Settings.shape.playback.unwrap().partial(),
     library: Settings.shape.library.unwrap().partial(),
   })
   .partial()

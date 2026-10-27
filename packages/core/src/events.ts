@@ -1,4 +1,4 @@
-import type { Health, PlayerState, ScanStatus, Settings } from './schemas'
+import type { Health, OutputState, PlayerState, ScanStatus, Settings } from './schemas'
 
 export type HaloclineEvent =
   | { type: 'player.changed'; data: PlayerState }
@@ -8,6 +8,7 @@ export type HaloclineEvent =
   | { type: 'health.changed'; data: Health }
   | { type: 'settings.changed'; data: Settings }
   | { type: 'scan.changed'; data: ScanStatus }
+  | { type: 'output.changed'; data: OutputState }
 
 export type EventType = HaloclineEvent['type']
 export type StampedEvent = HaloclineEvent & { id: number; at: number }

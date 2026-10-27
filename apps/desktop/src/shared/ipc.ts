@@ -3,6 +3,7 @@
 import type {
   ApiToken,
   Health,
+  OutputState,
   PlayerCommand,
   PlayerPatch,
   PlayerReport,
@@ -30,6 +31,7 @@ export interface IpcHandlers {
   'queue.move': (args: { id: string; position: QueuePosition }) => QueueItem
   'queue.remove': (args: { id: string }) => void
   'player.get': () => PlayerState
+  'player.output': () => OutputState
   'player.patch': (args: PlayerPatch) => PlayerState
   'player.next': () => PlayerState
   'player.previous': () => PlayerState
