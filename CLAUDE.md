@@ -15,6 +15,7 @@
 - `pnpm test:stream` builds the app and runs the direct YTM engine against fixed tracks
   (`halocline --test-stream`), reporting the failing step. It needs the network, so it's not
   part of `pnpm test`. Run it after touching `providers/po-token.ts`, `providers/ytm-stream.ts`
-  or `stream/track-cache.ts`. The `Stream canary` workflow runs it daily on GitHub and keeps an
-  issue labelled `stream-canary` open while it fails.
+  or `stream/track-cache.ts`. The `Stream canary` workflow runs it on demand (its schedule is paused:
+  YouTube bot-checks GitHub's hosted runners) and keeps an issue labelled `stream-canary` open
+  while it fails.
 - Before calling something done: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.

@@ -2,9 +2,12 @@ name: Stream canary
 
 # Runs the direct YouTube Music engine against fixed tracks (PLAN §4) and opens an
 # issue when it breaks. A canary, not a gate: nothing else depends on it.
+#
+# Manual only for now: YouTube bot-checks GitHub's hosted runners (LOGIN_REQUIRED), so a
+# schedule here would only report the runner's IP. Restore it on a self-hosted runner:
+#   schedule:
+#     - cron: '17 6 * * *'
 on:
-  schedule:
-    - cron: '17 6 * * *'
   workflow_dispatch:
 
 permissions:

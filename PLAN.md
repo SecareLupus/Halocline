@@ -187,10 +187,12 @@ device. Crossfade between the engines uses timed gain ramps over IPC.
 - `pnpm test:stream` runs the direct engine against a small, fixed set of videoIds and reports
   what failed at which step (player data, PO token, decipher, SABR). It runs the built app with
   `--test-stream` and reads each track to the end, past the one-minute cold-start allowance.
-- `.github/workflows/stream-canary.yml` runs it daily (and on demand) under Xvfb with Chromium's
-  sandbox on. A failure opens an issue labelled `stream-canary`, or comments on the open one. A
-  pass closes it. GitHub's datacenter IPs may be bot-checked by YouTube more than a home connection,
-  so a `player` failure there can mean the runner, not the code.
+- `.github/workflows/stream-canary.yml` runs it under Xvfb with Chromium's sandbox on. A failure
+  opens an issue labelled `stream-canary`, or comments on the open one. A pass closes it.
+- The schedule is paused, so for now it runs only on demand. YouTube refuses GitHub's hosted runners
+  with `LOGIN_REQUIRED` ("Sign in to confirm you're not a bot"), so a scheduled run there only
+  reports the runner's IP. The plan is to restore the daily schedule on a self-hosted runner on a
+  home connection.
 - Run in CI on a schedule, a failure opens an issue with that output. An agent picking up the issue
   has a reproducible failure and a clear definition of "fixed".
 - This is a canary, not a decision gate.
