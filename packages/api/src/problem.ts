@@ -3,7 +3,8 @@ import { z } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 
-export type ApiProblemType = ProblemType | 'unauthorized' | 'forbidden' | 'validation_failed'
+export type ApiProblemType =
+  ProblemType | 'unauthorized' | 'forbidden' | 'validation_failed' | 'rate_limited'
 
 const STATUS: Record<ApiProblemType, ContentfulStatusCode> = {
   invalid_request: 400,
@@ -14,6 +15,7 @@ const STATUS: Record<ApiProblemType, ContentfulStatusCode> = {
   stream_safe_violation: 409,
   revision_mismatch: 412,
   match_ambiguous: 422,
+  rate_limited: 429,
   not_implemented: 501,
   provider_unavailable: 503,
 }
@@ -43,6 +45,10 @@ const problemContent = { 'application/problem+json': { schema: Problem } }
 export const authErrors = {
   401: { description: 'Missing or invalid token', content: problemContent },
   403: { description: 'Token lacks the required scope', content: problemContent },
+  429: {
+    description: "Over the token's rate limit; see Retry-After",
+    content: problemContent,
+  },
 } as const
 
 export const errorResponse = (description: string) => ({ description, content: problemContent })

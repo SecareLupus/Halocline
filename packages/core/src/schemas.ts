@@ -60,6 +60,71 @@ export const NewSource = Source.pick({ kind: true, locator: true }).extend(
 )
 export type NewSource = z.infer<typeof NewSource>
 
+export const Tag = z.string().trim().min(1).max(50)
+
+/** A library row: the recording plus which kinds of source can play it right now. */
+export const LibraryEntry = Recording.extend({
+  available: z.boolean(),
+  sourceKinds: z.array(SourceKind),
+})
+export type LibraryEntry = z.infer<typeof LibraryEntry>
+
+export const RecordingDetail = Recording.extend({ sources: z.array(Source) })
+export type RecordingDetail = z.infer<typeof RecordingDetail>
+
+export const LibrarySort = z.enum(['title', 'artist', 'added'])
+export type LibrarySort = z.infer<typeof LibrarySort>
+
+export const LibraryQuery = z.object({
+  /** Full-text filter over title, artists and album. */
+  q: z.string().max(200).optional(),
+  inLibrary: z.boolean().default(true),
+  streamSafe: z.boolean().optional(),
+  /** Only recordings that can (or can't) be played right now. */
+  available: z.boolean().optional(),
+  tag: Tag.optional(),
+  sort: LibrarySort.default('title'),
+  limit: z.number().int().min(1).max(200).default(50),
+  /** Opaque; from a previous page's `nextCursor`. */
+  cursor: z.string().max(1000).optional(),
+})
+export type LibraryQuery = z.input<typeof LibraryQuery>
+
+export const LibraryPage = z.object({
+  items: z.array(LibraryEntry),
+  nextCursor: z.string().nullable(),
+})
+export type LibraryPage = z.infer<typeof LibraryPage>
+
+export const RecordingPatch = z
+  .object({
+    inLibrary: z.boolean(),
+    streamSafe: z.boolean(),
+    /** Replaces all tags. */
+    tags: z.array(Tag).max(50),
+    /** Adds or removes tags, leaving others alone; safe for bulk edits. */
+    addTags: z.array(Tag).max(50),
+    removeTags: z.array(Tag).max(50),
+  })
+  .partial()
+  .strict()
+  .refine((p) => !(p.tags && (p.addTags || p.removeTags)), {
+    message: 'Use either tags, or addTags/removeTags',
+  })
+export type RecordingPatch = z.infer<typeof RecordingPatch>
+
+export const BulkRecordingPatch = z.object({
+  ids: z.array(Id).min(1).max(1000),
+  changes: RecordingPatch,
+})
+export type BulkRecordingPatch = z.infer<typeof BulkRecordingPatch>
+
+export const BulkResult = z.object({
+  updated: z.number().int().nonnegative(),
+  notFound: z.array(Id),
+})
+export type BulkResult = z.infer<typeof BulkResult>
+
 export const QueueOrigin = z.enum(['user', 'api', 'autoplay'])
 export type QueueOrigin = z.infer<typeof QueueOrigin>
 

@@ -1,7 +1,36 @@
-import { ScanStatus, type Core } from '@halocline/core'
+import {
+  BulkRecordingPatch,
+  BulkResult,
+  Id,
+  LibraryPage,
+  LibrarySort,
+  Recording,
+  RecordingDetail,
+  RecordingPatch,
+  ScanStatus,
+  Tag,
+  type Core,
+} from '@halocline/core'
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import { requireScope, type ApiEnv } from '../auth'
-import { authErrors } from '../problem'
+import { authErrors, errorResponse } from '../problem'
+
+/** `true`/`false` (also 1/0, yes/no) in a query string, documented as a boolean. */
+const queryBool = () => z.stringbool().openapi({ type: 'boolean' })
+
+/** Query-string form of LibraryQuery: booleans and numbers arrive as text. */
+const BrowseQuery = z.object({
+  q: z.string().max(200).optional(),
+  inLibrary: queryBool().default(true).openapi({ type: 'boolean', default: true }),
+  streamSafe: queryBool().optional(),
+  available: queryBool().optional(),
+  tag: Tag.optional(),
+  sort: LibrarySort.default('title'),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.string().max(1000).optional(),
+})
+
+const RecordingParams = z.object({ id: Id })
 
 const ScanRequest = z.object({
   /** Re-read tags of every file, not just new or changed ones. */
@@ -9,6 +38,98 @@ const ScanRequest = z.object({
 })
 
 export function registerLibrary(app: OpenAPIHono<ApiEnv>, core: Core) {
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/library/recordings',
+      tags: ['library'],
+      summary: 'Browse the library',
+      description:
+        'Cursor-paginated. Pass `nextCursor` back as `cursor`, with the same `sort`, to get the next page.',
+      middleware: [requireScope('read')],
+      request: { query: BrowseQuery },
+      responses: {
+        200: {
+          description: 'A page of recordings',
+          content: { 'application/json': { schema: LibraryPage } },
+        },
+        ...authErrors,
+        400: errorResponse('Bad filter or cursor'),
+      },
+    }),
+    (c) => c.json(core.library.browse(c.req.valid('query')), 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/library/recordings/{id}',
+      tags: ['library'],
+      summary: 'One recording, with all its sources',
+      middleware: [requireScope('read')],
+      request: { params: RecordingParams },
+      responses: {
+        200: {
+          description: 'The recording',
+          content: { 'application/json': { schema: RecordingDetail } },
+        },
+        ...authErrors,
+        404: errorResponse('No such recording'),
+      },
+    }),
+    (c) => c.json(core.library.detail(c.req.valid('param').id), 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/v1/library/recordings/{id}',
+      tags: ['library'],
+      summary: 'Add to or remove from the library; set stream-safe and tags',
+      middleware: [requireScope('library:write')],
+      request: {
+        params: RecordingParams,
+        body: { content: { 'application/json': { schema: RecordingPatch } }, required: true },
+      },
+      responses: {
+        200: {
+          description: 'The updated recording',
+          content: { 'application/json': { schema: Recording } },
+        },
+        ...authErrors,
+        404: errorResponse('No such recording'),
+      },
+    }),
+    (c) => c.json(core.library.edit(c.req.valid('param').id, c.req.valid('json')), 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/v1/library/recordings',
+      tags: ['library'],
+      summary: 'Apply one change to many recordings',
+      description:
+        'All-or-nothing for the IDs that exist; unknown IDs are listed in `notFound`. ' +
+        'Use `addTags`/`removeTags` rather than `tags` to avoid overwriting existing tags.',
+      middleware: [requireScope('library:write')],
+      request: {
+        body: { content: { 'application/json': { schema: BulkRecordingPatch } }, required: true },
+      },
+      responses: {
+        200: {
+          description: 'What changed',
+          content: { 'application/json': { schema: BulkResult } },
+        },
+        ...authErrors,
+      },
+    }),
+    (c) => {
+      const { ids, changes } = c.req.valid('json')
+      return c.json(core.library.editMany(ids, changes), 200)
+    },
+  )
+
   app.openapi(
     createRoute({
       method: 'post',

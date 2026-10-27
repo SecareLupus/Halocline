@@ -2,6 +2,7 @@
 // validated in main against the same zod schemas the HTTP API uses.
 import type {
   ApiToken,
+  BulkResult,
   Health,
   OutputState,
   PlayerCommand,
@@ -13,6 +14,7 @@ import type {
   QueueItem,
   QueuePosition,
   Recording,
+  RecordingPatch,
   ScanStatus,
   Scope,
   Settings,
@@ -22,6 +24,8 @@ import type {
 
 export interface IpcHandlers {
   'library.search': (args: { q: string }) => Recording[]
+  'library.edit': (args: { id: string; changes: RecordingPatch }) => Recording
+  'library.editMany': (args: { ids: string[]; changes: RecordingPatch }) => BulkResult
   'library.addFolder': () => Settings
   'library.removeFolder': (args: { folder: string }) => Settings
   'library.rescan': (args: { full?: boolean }) => void
@@ -39,7 +43,10 @@ export interface IpcHandlers {
   'settings.get': () => Settings
   'settings.patch': (args: SettingsPatch) => Settings
   'tokens.list': () => ApiToken[]
-  'tokens.create': (args: { name: string; scopes: Scope[] }) => { secret: string; token: ApiToken }
+  'tokens.create': (args: { name: string; scopes: Scope[]; rateLimitPerMin?: number }) => {
+    secret: string
+    token: ApiToken
+  }
   'tokens.revoke': (args: { id: string }) => void
   'api.url': () => string | null
 }

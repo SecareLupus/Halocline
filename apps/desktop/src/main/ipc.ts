@@ -1,8 +1,10 @@
 import {
+  BulkRecordingPatch,
   DomainError,
   Id,
   PlayerPatch,
   QueuePosition,
+  RecordingPatch,
   Scope,
   SettingsPatch,
   type Core,
@@ -19,6 +21,14 @@ type Handler<C extends IpcChannel> = (
 export function registerIpc(core: Core, apiUrl: () => string | null): void {
   const handlers: { [C in IpcChannel]: Handler<C> } = {
     'library.search': (a) => core.library.search(z.object({ q: z.string() }).parse(a).q),
+    'library.edit': (a) => {
+      const { id, changes } = z.object({ id: Id, changes: RecordingPatch }).parse(a)
+      return core.library.edit(id, changes)
+    },
+    'library.editMany': (a) => {
+      const { ids, changes } = BulkRecordingPatch.parse(a)
+      return core.library.editMany(ids, changes)
+    },
     'library.addFolder': async () => {
       const window = BrowserWindow.getFocusedWindow()
       const options: Electron.OpenDialogOptions = {
@@ -66,10 +76,14 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
     'settings.patch': (a) => core.settings.patch(SettingsPatch.parse(a)),
     'tokens.list': () => core.tokens.list(),
     'tokens.create': (a) => {
-      const { name, scopes } = z
-        .object({ name: z.string().min(1).max(100), scopes: z.array(Scope).min(1) })
+      const { name, scopes, rateLimitPerMin } = z
+        .object({
+          name: z.string().min(1).max(100),
+          scopes: z.array(Scope).min(1),
+          rateLimitPerMin: z.number().int().positive().max(100_000).optional(),
+        })
         .parse(a)
-      return core.tokens.create(name, scopes)
+      return core.tokens.create(name, scopes, rateLimitPerMin)
     },
     'tokens.revoke': (a) => core.tokens.revoke(z.object({ id: Id }).parse(a).id),
     'api.url': () => apiUrl(),

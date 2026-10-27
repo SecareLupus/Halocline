@@ -23,6 +23,13 @@ export function Search(props: { state: AppState }) {
   const addFolder = () => props.state.run(() => call('library.addFolder'))
   const enqueue = (recording: Recording, position: 'next' | 'end') =>
     props.state.run(() => call('queue.add', { recordingId: recording.id, position }))
+  const setStreamSafe = (recording: Recording, streamSafe: boolean) =>
+    props.state.run(() => call('library.edit', { id: recording.id, changes: { streamSafe } }))
+  const allSafe = () => results().every((r) => r.streamSafe)
+  const setAllStreamSafe = (streamSafe: boolean) => {
+    const ids = results().map((r) => r.id)
+    return props.state.run(() => call('library.editMany', { ids, changes: { streamSafe } }))
+  }
 
   return (
     <section class="pane">
@@ -50,12 +57,30 @@ export function Search(props: { state: AppState }) {
           </p>
         }
       >
+        <div class="results-bar">
+          <span class="empty">
+            {results().length} results · {results().filter((r) => r.streamSafe).length} stream-safe
+          </span>
+          <button type="button" onClick={() => void setAllStreamSafe(!allSafe())}>
+            {allSafe() ? 'Unmark all stream-safe' : 'Mark all stream-safe'}
+          </button>
+        </div>
         <ul class="list">
           <For each={results()}>
             {(r) => (
               <li>
                 <TrackLabel recording={r} />
                 <span class="actions">
+                  <button
+                    type="button"
+                    class="safe-toggle"
+                    classList={{ on: r.streamSafe }}
+                    aria-pressed={r.streamSafe}
+                    title={r.streamSafe ? 'Stream-safe: click to unmark' : 'Mark stream-safe'}
+                    onClick={() => void setStreamSafe(r, !r.streamSafe)}
+                  >
+                    {r.streamSafe ? 'Safe ✓' : 'Safe?'}
+                  </button>
                   <button type="button" onClick={() => void enqueue(r, 'next')}>
                     Next
                   </button>

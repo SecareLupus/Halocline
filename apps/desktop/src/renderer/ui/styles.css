@@ -49,6 +49,7 @@ button:hover:not(:disabled) {
 }
 
 input[type='search'],
+input[type='number'],
 input:not([type]) {
   font: inherit;
   padding: 6px 10px;
@@ -322,4 +323,22 @@ h2 {
 
 .warning {
   color: var(--amber);
+}
+
+.results-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 8px 8px;
+  font-size: 12px;
+}
+
+.safe-toggle {
+  color: var(--muted);
+}
+
+.safe-toggle.on {
+  color: var(--green);
+  border-color: var(--green);
 }

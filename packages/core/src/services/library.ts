@@ -4,7 +4,20 @@ import { sep } from 'node:path'
 import type { Db } from '../db'
 import { DomainError } from '../errors'
 import type { EventBus } from '../events'
-import { NewRecording, NewSource, type Recording, type Source, type SourceKind } from '../schemas'
+import {
+  LibraryQuery,
+  NewRecording,
+  NewSource,
+  RecordingPatch,
+  type BulkResult,
+  type LibraryEntry,
+  type LibraryPage,
+  type LibrarySort,
+  type Recording,
+  type RecordingDetail,
+  type Source,
+  type SourceKind,
+} from '../schemas'
 
 interface RecordingRow {
   id: string
@@ -109,6 +122,53 @@ const toSource = (r: SourceRow): Source => ({
   lastChecked: r.last_checked,
 })
 
+/** Keyset orderings. Every column runs the same direction, so SQL row values compare them. */
+const SORTS: Record<LibrarySort, { keys: string[]; direction: 'ASC' | 'DESC' }> = {
+  title: { keys: ['r.title COLLATE NOCASE', 'r.id'], direction: 'ASC' },
+  artist: {
+    keys: [
+      "coalesce(json_extract(r.artists, '$[0]'), '') COLLATE NOCASE",
+      'r.title COLLATE NOCASE',
+      'r.id',
+    ],
+    direction: 'ASC',
+  },
+  added: { keys: ['r.added_at', 'r.id'], direction: 'DESC' },
+}
+
+interface Cursor {
+  sort: LibrarySort
+  keys: (string | number)[]
+}
+
+const encodeCursor = (c: Cursor) => Buffer.from(JSON.stringify(c)).toString('base64url')
+
+function decodeCursor(raw: string, sort: LibrarySort): Cursor {
+  try {
+    const c = JSON.parse(Buffer.from(raw, 'base64url').toString()) as Cursor
+    if (c.sort === sort && Array.isArray(c.keys) && c.keys.length === SORTS[sort].keys.length) {
+      return c
+    }
+  } catch {
+    // fall through
+  }
+  throw new DomainError('invalid_request', 'The cursor is invalid or belongs to another sort order')
+}
+
+/** Trims and de-duplicates tags, case-insensitively, keeping the first spelling. */
+function normalizeTags(tags: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const tag of tags.map((t) => t.trim()).filter(Boolean)) {
+    const key = tag.toLocaleLowerCase()
+    if (!seen.has(key)) {
+      seen.add(key)
+      out.push(tag)
+    }
+  }
+  return out
+}
+
 /** Turns free text into a safe FTS5 prefix query: every word must match. */
 export function toFtsQuery(text: string): string | undefined {
   const words = text.match(/[\p{L}\p{N}]+/gu)
@@ -204,6 +264,121 @@ export class LibraryService {
       )
       .all(query, limit) as RecordingRow[]
     return rows.map(toRecording)
+  }
+
+  /** Pages through recordings with filters, using an opaque keyset cursor. */
+  browse(input: LibraryQuery = {}): LibraryPage {
+    const query = LibraryQuery.parse(input)
+    const sort = SORTS[query.sort]
+    const where: string[] = []
+    const params: unknown[] = []
+
+    where.push('r.in_library = ?')
+    params.push(query.inLibrary ? 1 : 0)
+    if (query.streamSafe !== undefined) {
+      where.push('r.stream_safe = ?')
+      params.push(query.streamSafe ? 1 : 0)
+    }
+    if (query.available !== undefined) {
+      where.push(
+        `${query.available ? '' : 'NOT '}EXISTS (SELECT 1 FROM sources s WHERE s.recording_id = r.id AND s.available = 1)`,
+      )
+    }
+    if (query.tag !== undefined) {
+      where.push('EXISTS (SELECT 1 FROM json_each(r.tags) WHERE lower(value) = lower(?))')
+      params.push(query.tag)
+    }
+    if (query.q !== undefined) {
+      const fts = toFtsQuery(query.q)
+      if (!fts) return { items: [], nextCursor: null }
+      where.push('r.pk IN (SELECT rowid FROM recordings_fts WHERE recordings_fts MATCH ?)')
+      params.push(fts)
+    }
+    if (query.cursor) {
+      const cursor = decodeCursor(query.cursor, query.sort)
+      const op = sort.direction === 'ASC' ? '>' : '<'
+      where.push(`(${sort.keys.join(', ')}) ${op} (${sort.keys.map(() => '?').join(', ')})`)
+      params.push(...cursor.keys)
+    }
+
+    const order = sort.keys.map((k) => `${k} ${sort.direction}`).join(', ')
+    const keyColumns = sort.keys.map((k, i) => `${k.replace(/ COLLATE NOCASE$/, '')} AS k${i}`)
+    const rows = this.db
+      .prepare(
+        `SELECT r.*, ${keyColumns.join(', ')},
+           (SELECT json_group_array(DISTINCT s.kind) FROM sources s
+            WHERE s.recording_id = r.id AND s.available = 1) AS kinds
+         FROM recordings r
+         WHERE ${where.join(' AND ')}
+         ORDER BY ${order}
+         LIMIT ?`,
+      )
+      .all(...params, query.limit + 1) as (RecordingRow & { kinds: string } & Record<
+        string,
+        string | number
+      >)[]
+
+    const page = rows.slice(0, query.limit)
+    const last = page.at(-1)
+    const nextCursor =
+      rows.length > query.limit && last
+        ? encodeCursor({ sort: query.sort, keys: sort.keys.map((_, i) => last[`k${i}`]!) })
+        : null
+    return {
+      items: page.map((row): LibraryEntry => {
+        const sourceKinds = JSON.parse(row.kinds) as SourceKind[]
+        return { ...toRecording(row), available: sourceKinds.length > 0, sourceKinds }
+      }),
+      nextCursor,
+    }
+  }
+
+  detail(id: string): RecordingDetail {
+    return { ...this.require(id), sources: this.sources(id) }
+  }
+
+  /** Applies a patch to one recording. */
+  edit(id: string, input: RecordingPatch): Recording {
+    const patch = RecordingPatch.parse(input)
+    this.transaction(() => this.applyPatch(this.require(id), patch))
+    this.notifyChanged([id])
+    return this.require(id)
+  }
+
+  /** Applies one patch to many recordings in a single transaction. */
+  editMany(ids: string[], input: RecordingPatch): BulkResult {
+    const patch = RecordingPatch.parse(input)
+    const notFound: string[] = []
+    const updated = this.transaction(() => {
+      const done: string[] = []
+      for (const id of new Set(ids)) {
+        const recording = this.get(id)
+        if (!recording) notFound.push(id)
+        else {
+          this.applyPatch(recording, patch)
+          done.push(id)
+        }
+      }
+      return done
+    })
+    this.notifyChanged(updated)
+    return { updated: updated.length, notFound }
+  }
+
+  private applyPatch(recording: Recording, patch: RecordingPatch): void {
+    let tags: string[] | undefined
+    if (patch.tags) tags = normalizeTags(patch.tags)
+    else if (patch.addTags || patch.removeTags) {
+      const remove = new Set((patch.removeTags ?? []).map((t) => t.trim().toLocaleLowerCase()))
+      tags = normalizeTags([...recording.tags, ...(patch.addTags ?? [])]).filter(
+        (t) => !remove.has(t.toLocaleLowerCase()),
+      )
+    }
+    this.update(recording.id, {
+      ...(patch.inLibrary !== undefined && { inLibrary: patch.inLibrary }),
+      ...(patch.streamSafe !== undefined && { streamSafe: patch.streamSafe }),
+      ...(tags && { tags }),
+    })
   }
 
   addSource(recordingId: string, input: NewSource): Source {

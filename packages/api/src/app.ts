@@ -2,6 +2,7 @@ import { DomainError, type Core } from '@halocline/core'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { authenticate, type ApiEnv } from './auth'
 import { problem } from './problem'
+import { rateLimit, RateLimiter } from './rate-limit'
 import { registerEvents } from './routes/events'
 import { registerLibrary } from './routes/library'
 import { registerPlayer } from './routes/player'
@@ -9,7 +10,12 @@ import { registerQueue } from './routes/queue'
 import { registerSearch } from './routes/search'
 import { registerSystem } from './routes/system'
 
-export function createApi(core: Core): OpenAPIHono<ApiEnv> {
+export interface ApiOptions {
+  /** Clock for rate limiting; tests pass a fake one. */
+  now?: () => number
+}
+
+export function createApi(core: Core, options: ApiOptions = {}): OpenAPIHono<ApiEnv> {
   const app = new OpenAPIHono<ApiEnv>({
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -42,6 +48,7 @@ export function createApi(core: Core): OpenAPIHono<ApiEnv> {
   })
 
   app.use('/v1/*', authenticate(core))
+  app.use('/v1/*', rateLimit(new RateLimiter(options.now)))
   registerPlayer(app, core)
   registerQueue(app, core)
   registerSearch(app, core)

@@ -154,15 +154,22 @@ function ApiTokens(props: { state: AppState }) {
   const [name, setName] = createSignal('')
   const [scopes, setScopes] = createSignal<Scope[]>(['read'])
   const [secret, setSecret] = createSignal<string | null>(null)
+  const [rateLimit, setRateLimit] = createSignal('')
 
   const toggle = (scope: Scope, on: boolean) =>
     setScopes((current) => (on ? [...current, scope] : current.filter((x) => x !== scope)))
   const create = () =>
     // eslint-disable-next-line solid/reactivity -- only called from event handlers
     props.state.run(async () => {
-      const created = await call('tokens.create', { name: name().trim(), scopes: scopes() })
+      const perMin = Number(rateLimit())
+      const created = await call('tokens.create', {
+        name: name().trim(),
+        scopes: scopes(),
+        ...(perMin > 0 && { rateLimitPerMin: Math.round(perMin) }),
+      })
       setSecret(created.secret)
       setName('')
+      setRateLimit('')
       await refetch()
     })
   const revoke = (token: ApiToken) =>
@@ -186,7 +193,10 @@ function ApiTokens(props: { state: AppState }) {
             <li>
               <span class="track">
                 <span class="title">{t.name}</span>
-                <span class="artist">{t.scopes.join(', ')}</span>
+                <span class="artist">
+                  {t.scopes.join(', ')}
+                  {t.rateLimitPerMin ? ` · ${t.rateLimitPerMin}/min` : ''}
+                </span>
               </span>
               <button type="button" onClick={() => void revoke(t)}>
                 Revoke
@@ -206,6 +216,13 @@ function ApiTokens(props: { state: AppState }) {
           placeholder="Token name, e.g. Stream bot"
           value={name()}
           onInput={(e) => setName(e.currentTarget.value)}
+        />
+        <input
+          type="number"
+          min="1"
+          placeholder="Requests per minute (optional, e.g. 30 for a chat bot)"
+          value={rateLimit()}
+          onInput={(e) => setRateLimit(e.currentTarget.value)}
         />
         <div class="scopes">
           <For each={SCOPES}>
