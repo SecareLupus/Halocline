@@ -1,0 +1,54 @@
+name: Stream canary
+
+# Runs the direct YouTube Music engine against fixed tracks (PLAN §4) and opens an
+# issue when it breaks. A canary, not a gate: nothing else depends on it.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: stream-canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Ubuntu blocks the unprivileged user namespaces Chromium's sandbox needs. Google's
+      # scripts run in a sandboxed renderer, so keep the sandbox rather than --no-sandbox.
+      - name: Allow Chromium's sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Run the stream self-test
+        # Records the result instead of failing here, so the issue step always runs.
+        run: |
+          xvfb-run --auto-servernum pnpm exec electron apps/desktop --test-stream \
+            > report.json 2> electron.log || true
+          cat report.json
+      - name: Open, update or close the canary issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          node scripts/stream-canary-issue.mjs report.json electron.log
+          "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stream-canary
+          path: |
+            report.json
+            electron.log
+          retention-days: 14
