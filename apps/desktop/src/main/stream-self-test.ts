@@ -1,5 +1,6 @@
 import { StreamError, YtmStreamer } from '@halocline/core'
 import { app } from 'electron'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { YtmPageRuntime } from './ytm-runtime'
 
@@ -62,6 +63,10 @@ export async function runStreamSelfTest(): Promise<number> {
     }
   }
   runtime.destroy()
-  console.log(JSON.stringify({ ok: results.every((r) => r.ok), results }, null, 2))
+  const report = JSON.stringify({ ok: results.every((r) => r.ok), results }, null, 2)
+  console.log(report)
+  // CI reads the report from a file: Chromium's logs share the console.
+  const reportPath = process.env['HALOCLINE_STREAM_REPORT']
+  if (reportPath) writeFileSync(reportPath, report)
   return results.every((r) => r.ok) ? 0 : 1
 }

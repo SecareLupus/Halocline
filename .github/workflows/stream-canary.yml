@@ -34,10 +34,13 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Run the stream self-test
         # Records the result instead of failing here, so the issue step always runs.
+        # xvfb-run merges stderr into stdout, so the report goes to its own file.
+        env:
+          HALOCLINE_STREAM_REPORT: report.json
         run: |
           xvfb-run --auto-servernum pnpm exec electron apps/desktop --test-stream \
-            > report.json 2> electron.log || true
-          cat report.json
+            > electron.log 2>&1 || true
+          cat report.json || tail -40 electron.log
       - name: Open, update or close the canary issue
         env:
           GH_TOKEN: ${{ github.token }}
