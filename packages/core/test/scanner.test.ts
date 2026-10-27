@@ -172,6 +172,16 @@ describe('LibraryScanner', () => {
     async () => {
       writeWav(join(music, 'a.wav'), { title: 'Alpha' })
       await setup(true).scanner.start()
+      // On Windows, @parcel/watcher's subscribe() can resolve before the native watch is
+      // armed (seen on busy CI runners), so changes made at once are lost. Wait until a
+      // probe file is noticed before making the changes under test.
+      await vi.waitFor(
+        () => {
+          writeWav(join(music, 'probe.wav'), { title: 'Probe' })
+          expect(byTitle('probe')).toBeDefined()
+        },
+        { timeout: WATCH_TIMEOUT_MS, interval: 500 },
+      )
 
       writeWav(join(music, 'sub/b.wav'), { title: 'Bravo' })
       await vi.waitFor(() => expect(byTitle('bravo')).toBeDefined(), { timeout: WATCH_TIMEOUT_MS })
