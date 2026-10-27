@@ -178,5 +178,6 @@ describe('LibraryScanner', () => {
     rmSync(join(music, 'sub'), { recursive: true })
     await vi.waitFor(() => expect(sourcesOf('bravo')[0]?.available).toBe(false), { timeout: 5000 })
     expect(existsSync(join(music, 'a.wav'))).toBe(true)
-  })
+    // Three watcher round trips: slower on Windows than the default 5 s test budget.
+  }, 20_000)
 })
