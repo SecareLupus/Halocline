@@ -102,6 +102,11 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
       return core.queue.move(id, position)
     },
     'queue.remove': (a) => core.queue.remove(z.object({ id: Id }).parse(a).id),
+    'queue.pin': (a) => {
+      const { id, sourceId } = z.object({ id: Id, sourceId: Id.nullable() }).parse(a)
+      return core.queue.pinSource(id, sourceId)
+    },
+    'library.saveYtm': (a) => core.catalog.saveYtmSong(z.object({ song: YtmSong }).parse(a).song),
     'player.get': () => core.player.get(),
     'player.output': () => core.player.getOutput(),
     'player.patch': (a) => core.player.patch(PlayerPatch.parse(a)),

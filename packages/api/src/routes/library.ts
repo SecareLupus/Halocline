@@ -32,6 +32,11 @@ const BrowseQuery = z.object({
 
 const RecordingParams = z.object({ id: Id })
 
+const SaveRequest = z.object({
+  /** A recording ID, a `ytm:<videoId>` ref, or a music.youtube.com link. */
+  input: z.string().min(1).max(2000),
+})
+
 const ScanRequest = z.object({
   /** Re-read tags of every file, not just new or changed ones. */
   full: z.boolean().default(false),
@@ -127,6 +132,38 @@ export function registerLibrary(app: OpenAPIHono<ApiEnv>, core: Core) {
     (c) => {
       const { ids, changes } = c.req.valid('json')
       return c.json(core.library.editMany(ids, changes), 200)
+    },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/library/recordings',
+      tags: ['library'],
+      summary: 'Save a song to the library',
+      description:
+        'Takes what `POST /v1/queue/items` takes: a recording ID, a `ytm:<videoId>` ref or a ' +
+        'music.youtube.com link. A cloud song that matches a local file joins that recording ' +
+        'instead of duplicating it. Saving twice is harmless.',
+      middleware: [requireScope('library:write')],
+      request: {
+        body: { content: { 'application/json': { schema: SaveRequest } }, required: true },
+      },
+      responses: {
+        200: {
+          description: 'The saved recording',
+          content: { 'application/json': { schema: RecordingDetail } },
+        },
+        ...authErrors,
+        404: errorResponse('Nothing matched'),
+        422: errorResponse('More than one recording matched'),
+        501: errorResponse('That kind of link is not supported yet'),
+        503: errorResponse('YouTube Music is unavailable'),
+      },
+    }),
+    async (c) => {
+      const recording = await core.catalog.save(c.req.valid('json').input)
+      return c.json(core.library.detail(recording.id), 200)
     },
   )
 

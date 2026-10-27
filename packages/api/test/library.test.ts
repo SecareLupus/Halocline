@@ -133,3 +133,28 @@ describe('rate limits', () => {
     expect((await call('GET', '/v1/queue', limited)).res.status).toBe(200)
   })
 })
+
+describe('POST /v1/library/recordings', () => {
+  it('saves a recording to the library, once', async () => {
+    const token = core.tokens.create('w', ['library:write']).secret
+    const queued = core.library.create({ title: 'Cloud song', artists: ['A'], inLibrary: false })
+    const save = () =>
+      app.request('/v1/library/recordings', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: queued.id }),
+      })
+    const res = await save()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ id: queued.id, inLibrary: true, sources: [] })
+    expect((await save()).status).toBe(200)
+
+    const readOnly = core.tokens.create('r', ['read']).secret
+    const denied = await app.request('/v1/library/recordings', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${readOnly}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: 'ytm:aaaaaaaaaaa' }),
+    })
+    expect(denied.status).toBe(403)
+  })
+})

@@ -13,6 +13,12 @@ export function Search(props: { state: AppState }) {
   const hasFolders = () => (props.state.settings()?.library.folders.length ?? 0) > 0
   const library = () => results().flatMap((r) => (r.kind === 'library' ? [r.recording] : []))
   const cloud = () => results().flatMap((r) => (r.kind === 'ytm' ? [r.song] : []))
+  const cloudOnly = () =>
+    new Set(
+      results().flatMap((r) =>
+        r.kind === 'library' && !r.sources.some((s) => s.kind === 'local') ? [r.recording.id] : [],
+      ),
+    )
 
   // Only the latest search may set results, however the responses arrive.
   let latest = 0
@@ -53,6 +59,7 @@ export function Search(props: { state: AppState }) {
     props.state.run(() => call('queue.add', { recordingId: recording.id, position }))
   const enqueueYtm = (song: YtmSong, position: 'next' | 'end') =>
     props.state.run(() => call('queue.addYtm', { song, position }))
+  const saveYtm = (song: YtmSong) => props.state.run(() => call('library.saveYtm', { song }))
   const setStreamSafe = (recording: Recording, streamSafe: boolean) =>
     props.state.run(() => call('library.edit', { id: recording.id, changes: { streamSafe } }))
   const allSafe = () => library().every((r) => r.streamSafe)
@@ -107,6 +114,11 @@ export function Search(props: { state: AppState }) {
                 <li>
                   <TrackLabel track={r} />
                   <span class="actions">
+                    <Show when={cloudOnly().has(r.id)}>
+                      <span class="badge" title="No local file; plays from YouTube Music">
+                        cloud
+                      </span>
+                    </Show>
                     <button
                       type="button"
                       class="safe-toggle"
@@ -139,6 +151,13 @@ export function Search(props: { state: AppState }) {
                 <li>
                   <TrackLabel track={song} />
                   <span class="actions">
+                    <button
+                      type="button"
+                      title="Save to your library"
+                      onClick={() => void saveYtm(song)}
+                    >
+                      Save
+                    </button>
                     <button type="button" onClick={() => void enqueueYtm(song, 'next')}>
                       Next
                     </button>

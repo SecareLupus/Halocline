@@ -4,6 +4,7 @@ import { sep } from 'node:path'
 import type { Db } from '../db'
 import { DomainError } from '../errors'
 import type { EventBus } from '../events'
+import { DURATION_TOLERANCE_MS, sameRecording, type SongIdentity } from '../library/match'
 import {
   LibraryQuery,
   NewRecording,
@@ -239,6 +240,47 @@ export class LibraryService {
     return row && toRecording(row)
   }
 
+  /**
+   * The one existing recording that is the same song (PLAN §3), among those with
+   * no `missing`-kind source yet, so two files never merge into one recording.
+   * When several fit, the one saved to the library wins; if that doesn't settle
+   * it, undefined, as when nothing fits.
+   */
+  findMatch(song: SongIdentity, missing: SourceKind): Recording | undefined {
+    const lacking = `NOT EXISTS (SELECT 1 FROM sources s WHERE s.recording_id = r.id AND s.kind = ?)`
+    const rows: RecordingRow[] = []
+    if (song.isrc) {
+      rows.push(
+        ...(this.db
+          .prepare(`SELECT r.* FROM recordings r WHERE r.isrc = ? COLLATE NOCASE AND ${lacking}`)
+          .all(song.isrc, missing) as RecordingRow[]),
+      )
+    }
+    if (song.durationMs !== null) {
+      rows.push(
+        ...(this.db
+          .prepare(
+            `SELECT r.* FROM recordings r WHERE r.duration_ms BETWEEN ? AND ? AND ${lacking}`,
+          )
+          .all(
+            song.durationMs - DURATION_TOLERANCE_MS,
+            song.durationMs + DURATION_TOLERANCE_MS,
+            missing,
+          ) as RecordingRow[]),
+      )
+    }
+    const matches = new Map<string, Recording>()
+    for (const row of rows) {
+      const recording = toRecording(row)
+      if (sameRecording(song, recording)) matches.set(recording.id, recording)
+    }
+    if (matches.size === 1) return [...matches.values()][0]
+    // A song and its music video often match alike; the one saved to the library is
+    // the one meant (PLAN §3: a file joins the saved cloud song).
+    const saved = [...matches.values()].filter((r) => r.inLibrary)
+    return saved.length === 1 ? saved[0] : undefined
+  }
+
   get(id: string): Recording | undefined {
     const row = this.db.prepare('SELECT * FROM recordings WHERE id = ?').get(id) as
       RecordingRow | undefined
@@ -274,6 +316,17 @@ export class LibraryService {
   ensureYtmSong(song: YtmSong): Recording {
     const known = this.sourceByLocator('ytm', song.videoId)
     if (known) return this.require(known.recordingId)
+    // The same song already known (usually a local file): it gains a cloud source,
+    // keeping its tags and stream-safe flag.
+    const match = this.findMatch(song, 'ytm')
+    if (match) {
+      this.transaction(() => {
+        if (!match.artwork && song.artwork) this.update(match.id, { artwork: song.artwork })
+        this.addSource(match.id, { kind: 'ytm', locator: song.videoId })
+      })
+      this.notifyChanged([match.id])
+      return this.require(match.id)
+    }
     const id = this.transaction(() => {
       const recordingId = this.insert({
         title: song.title,
@@ -398,8 +451,10 @@ export class LibraryService {
         (t) => !remove.has(t.toLocaleLowerCase()),
       )
     }
+    // The stream-safe tag lives on library items (PLAN §3), so tagging one saves it.
+    const inLibrary = patch.streamSafe === true ? true : patch.inLibrary
     this.update(recording.id, {
-      ...(patch.inLibrary !== undefined && { inLibrary: patch.inLibrary }),
+      ...(inLibrary !== undefined && { inLibrary }),
       ...(patch.streamSafe !== undefined && { streamSafe: patch.streamSafe }),
       ...(tags && { tags }),
     })
@@ -468,7 +523,7 @@ export class LibraryService {
       return { recordingId: moved.recordingId, outcome: 'moved' }
     }
     // Same song already known (e.g. a saved YTM track): attach the file to it.
-    const match = file.isrc ? this.findByIsrc(file.isrc) : undefined
+    const match = this.findMatch(tags, 'local')
     if (match) {
       this.update(match.id, {
         inLibrary: true,

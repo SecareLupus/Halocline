@@ -89,6 +89,23 @@ export class CatalogService {
     })
   }
 
+  /**
+   * Saves what `input` resolves to into the library (PLAN §3: the library is a
+   * superset of local files and cloud tracks). Saving twice is harmless.
+   */
+  async save(input: string): Promise<Recording> {
+    return this.saveRecording(await this.resolve(input))
+  }
+
+  /** Saves a YTM song we already have details for (e.g. a search result). */
+  saveYtmSong(song: YtmSong): Recording {
+    return this.saveRecording(this.library.ensureYtmSong(song))
+  }
+
+  private saveRecording(recording: Recording): Recording {
+    return recording.inLibrary ? recording : this.library.edit(recording.id, { inLibrary: true })
+  }
+
   /** The recording for a YTM song we already have details for (e.g. a search result). */
   addYtmSong(song: YtmSong): Recording {
     return this.library.ensureYtmSong(song)

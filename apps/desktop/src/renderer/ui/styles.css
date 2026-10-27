@@ -307,13 +307,19 @@ h2 {
   gap: 12px;
 }
 
-.field select {
+.field select,
+.actions select {
   font: inherit;
   padding: 4px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text);
+}
+
+.actions select {
+  font-size: 12px;
+  padding: 2px 6px;
 }
 
 .field .value {
@@ -323,6 +329,11 @@ h2 {
 
 .warning {
   color: var(--amber);
+}
+
+.badge.warning-badge {
+  color: var(--amber);
+  border-color: var(--amber);
 }
 
 .results-bar {

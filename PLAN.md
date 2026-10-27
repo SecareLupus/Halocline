@@ -104,6 +104,32 @@ QueueItem   id, recording_id, pinned_source_id?, origin (user|api|autoplay),
   - Autoplay picks only stream-safe Recordings. The tag lives on library items, so in practice
     autoplay draws from the library alone in this mode.
 
+Phase 3 as built:
+- **Matching** (`packages/core/src/library/match.ts`):
+  - ISRC decides when both sides have one.
+  - Otherwise the titles must match after normalising: case, accents and punctuation folded,
+    featured artists dropped, and neutral qualifiers like "Remastered 2011" or "Explicit" dropped.
+    "Radio Edit" and "Live" are kept.
+  - At least one artist must match ("- Topic" stripped), and the durations must be within 3 s.
+  - The candidate must have no source of that kind yet, so two files never merge.
+  - If several recordings fit, the one saved to the library wins. Otherwise there's no merge: a
+    missed merge leaves a duplicate, but a wrong one plays the wrong song.
+- **Where matching applies:**
+  - Scanning a new file attaches it to a matching recording.
+  - Queueing or saving a YTM song that matches a local recording adds a `ytm` source to it, so a
+    chat request for a song you own inherits its stream-safe tag.
+- **Saving:** `POST /v1/library/recordings` takes the same inputs as the queue and saves to the
+  library. YTM search results have a Save button, and library rows without a local file show a
+  "cloud" badge. Tagging a song stream-safe also saves it.
+- **Stream-safe mode in the player:**
+  - Untagged songs already queued are skipped, and the queue marks them "will be skipped".
+  - Turning the mode on skips an untagged song that's playing.
+- **Pinning:** queue items carry their `sources`, and the queue shows a "Play from" menu (Auto,
+  Local file, YouTube Music) when there's more than one.
+- **Not built:** manual merge or split of two existing recordings, for when matching gets it
+  wrong. Two recordings that already exist separately (e.g. queued before matching existed) stay
+  separate.
+
 Storage:
 - SQLite (`better-sqlite3`) with FTS5 over title, artist and album.
 - Vector similarity via `sqlite-vec`, or brute-force cosine search in memory, which is fine at 10k
@@ -339,7 +365,7 @@ features.
 
 A single page served by the API server at `/overlay/now-playing?token=<overlay token>`. It's added
 to OBS as a **Browser Source**. The background is transparent and the layout fills whatever size
-the source is set to. Recommended size: 800×120.
+the source is set to. Recommended size: 375×140.
 
 **Layout:**
 
@@ -359,7 +385,8 @@ the source is set to. Recommended size: 800×120.
   - Row 1 is **Artist**; multiple artists are joined with ", ".
   - Row 2 is **Song Title**.
   - Each row is a single line, cut off with an ellipsis if too long.
-  - Font size scales with the source height.
+  - Font size scales with the source height, and with the width for narrow sources
+    (`--hl-font-size` overrides it).
 
 **Behaviour:**
 - **Data:** on load the page fetches `GET /v1/player`, then subscribes to `/v1/events` for

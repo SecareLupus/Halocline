@@ -19,6 +19,7 @@ export * from './errors'
 export * from './events'
 export * from './schemas'
 export { openDatabase, type Db } from './db'
+export { normalizeArtist, normalizeTitle, sameRecording, type SongIdentity } from './library/match'
 export {
   toFtsQuery,
   LibraryService,

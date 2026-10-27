@@ -185,4 +185,33 @@ describe('PlayerService', () => {
     player.report({ type: 'ended' })
     expect(player.get().current).toMatchObject({ engine: 'cache' })
   })
+
+  it('skips untagged songs in stream-safe mode, even ones queued before it came on', () => {
+    const { enqueue, loads } = setup()
+    const unsafe = enqueue('Untagged')
+    const safe = enqueue('Tagged')
+    core.library.edit(safe.recordingId, { streamSafe: true })
+    expect(core.queue.get(unsafe.id).sources).toHaveLength(1)
+
+    core.settings.patch({ streamSafeMode: true })
+    core.player.patch({ playing: true })
+    expect(core.player.get().current?.recording.title).toBe('Tagged')
+    expect(loads().map((l) => l.type === 'load' && l.nowPlaying.recording.title)).toEqual([
+      'Tagged',
+    ])
+  })
+
+  it('takes an untagged song off the air when stream-safe mode comes on', () => {
+    const { enqueue } = setup()
+    enqueue('Untagged')
+    const safe = enqueue('Tagged')
+    core.library.edit(safe.recordingId, { streamSafe: true })
+    core.player.patch({ playing: true })
+    expect(core.player.get().current?.recording.title).toBe('Untagged')
+
+    core.settings.patch({ streamSafeMode: true })
+    expect(core.player.get().current?.recording.title).toBe('Tagged')
+    core.settings.patch({ autoplay: { enabled: false } })
+    expect(core.player.get().current?.recording.title).toBe('Tagged')
+  })
 })

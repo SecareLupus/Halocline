@@ -96,6 +96,8 @@ export class PlayerService {
     events.subscribe((e) => {
       if (e.type === 'settings.changed') this.send({ type: 'configure', playback: e.data.playback })
       if (e.type === 'queue.changed' && !this.busy) this.recue()
+      // Turning stream-safe mode on takes an untagged song off the air at once.
+      if (e.type === 'settings.changed' && this.current && !this.allowed(this.current)) this.next()
     })
   }
 
@@ -181,7 +183,7 @@ export class PlayerService {
   }
 
   private start(item: QueueItem, startMs = 0, forceFallback = false): PlayerState {
-    const load = this.prepare(item, forceFallback)
+    const load = this.allowed(item) ? this.prepare(item, forceFallback) : undefined
     if (!load) {
       // Nothing playable for this one; move on rather than stall the stream.
       this.current = item
@@ -286,8 +288,8 @@ export class PlayerService {
   private recue(): void {
     if (!this.current) return
     const next = this.state.repeat === 'one' ? this.current : this.queue.peek()
-    const load = next && this.prepare(next)
-    const usable = load && load.engine !== 'fallback' ? { item: next, load } : null
+    const load = next && this.allowed(next) ? this.prepare(next) : undefined
+    const usable = next && load && load.engine !== 'fallback' ? { item: next, load } : null
     if (usable?.load.engine === 'direct') {
       const source = this.library.source(usable.load.nowPlaying.sourceId)
       if (source) this.tracks?.prefetch(source)
@@ -295,6 +297,15 @@ export class PlayerService {
     if (usable?.item.id === this.cued?.item.id && usable?.load.url === this.cued?.load.url) return
     this.cued = usable
     this.send({ type: 'cue', next: usable?.load ?? null })
+  }
+
+  /**
+   * Stream-safe mode (PLAN §3) is checked when adding to the queue, and again
+   * here: songs queued before the mode came on, or untagged since, are skipped.
+   */
+  private allowed(item: QueueItem): boolean {
+    if (!this.settings.get().streamSafeMode) return true
+    return this.library.get(item.recordingId)?.streamSafe ?? false
   }
 
   private prepare(item: QueueItem, forceFallback = false): TrackLoad | undefined {

@@ -194,6 +194,7 @@ export class QueueService {
       requestedBy: r.requested_by,
       addedAt: r.added_at,
       recording: this.library.require(r.recording_id),
+      sources: this.library.sources(r.recording_id),
     }
   }
 }

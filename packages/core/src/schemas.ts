@@ -169,6 +169,8 @@ export const QueueItem = z.object({
   requestedBy: z.string().nullable(),
   addedAt: z.iso.datetime(),
   recording: Recording,
+  /** Where it can play from, e.g. to offer a choice for `pinnedSourceId`. */
+  sources: z.array(Source),
 })
 export type QueueItem = z.infer<typeof QueueItem>
 
