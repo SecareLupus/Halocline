@@ -141,6 +141,23 @@ device. Crossfade between the engines uses timed gain ramps over IPC.
 - Ad blocking is on the Planned TODO list, not the MVP. With Premium, the fallback plays no ads.
 - Without Premium, ads can play in this engine, so it must detect YTM's ad state and report it as
   `ad`, not as song progress. The queue, overlay and API then never show an ad as the track.
+- As built:
+  - Main keeps a target state (video, start position, play/pause, volume, seek, output device). The
+    window's preload drives the page's own `<video>` towards it and reports back. The preload
+    runs in an isolated world and exposes nothing to the page.
+  - Each track is a fresh load of `music.youtube.com/watch?v=…`.
+  - Ads are spotted by the YouTube player's `ad-showing` / `ad-interrupting` classes. During an ad
+    the song's clock is frozen, and the start position is applied only once the song itself plays.
+  - When YTM moves on to its own autoplay pick, the preload keeps it paused. The core decides what
+    plays next.
+  - The output device is matched by label, because device IDs differ per origin. The YTM session's
+    permission check lets only this window list and pick audio outputs, and nothing is granted on
+    request.
+  - A core `EngineRouter` sends each command to the active engine, and loading on one stops the
+    other. Reports from the inactive engine are dropped.
+  - A load that doesn't start playing within 20 s of song time (ads excluded) reports an error.
+  - Not built yet: the crossfade between engines (a switch is a cut), and handling the EU cookie
+    consent page.
 
 **Engine selection:**
 - Try direct streaming. On failure (setup error, stall, HTTP error), switch to the fallback within

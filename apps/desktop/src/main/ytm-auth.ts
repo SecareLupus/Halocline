@@ -1,4 +1,4 @@
-import { BrowserWindow, session, type Session } from 'electron'
+import { BrowserWindow, session, type Session, type WebContents } from 'electron'
 
 /** The YouTube Music sign-in lives in its own persistent session, apart from the app's. */
 export const YTM_PARTITION = 'persist:ytm'
@@ -11,11 +11,20 @@ export function ytmSession(): Session {
   return session.fromPartition(YTM_PARTITION)
 }
 
-/** Remote Google pages get no permissions (camera, notifications, ...). */
-export function lockDownYtmSession(): void {
+/**
+ * Remote Google pages get no permissions (camera, notifications, ...). The one
+ * exception: the fallback engine's page may list and pick audio outputs, which
+ * it needs to play on the chosen device. Nothing is ever granted on request.
+ */
+export function lockDownYtmSession(mayPickOutput: (contents: WebContents) => boolean): void {
   const s = ytmSession()
   s.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
-  s.setPermissionCheckHandler(() => false)
+  s.setPermissionCheckHandler((contents, permission, _origin, details) => {
+    if (!contents || !mayPickOutput(contents)) return false
+    if (permission === 'speaker-selection') return true
+    // Device labels are hidden unless this passes; video stays denied.
+    return permission === 'media' && details.mediaType === 'audio'
+  })
 }
 
 /** The music.youtube.com cookie header, if the session has any cookies. */

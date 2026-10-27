@@ -1,5 +1,5 @@
 import { startApiServer, type RunningServer } from '@halocline/api'
-import { createCore, type PlayerCommand, type PlayerReport } from '@halocline/core'
+import { createCore, EngineRouter, type PlayerReport } from '@halocline/core'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
@@ -9,6 +9,7 @@ import { runScanInWorker } from './scan-runner'
 import { runStreamSelfTest } from './stream-self-test'
 import { createPlayerWindow, createUiWindow } from './windows'
 import { lockDownYtmSession, watchYtmCookies, ytmCookie } from './ytm-auth'
+import { YtmFallbackEngine } from './ytm-engine'
 import { YtmPageRuntime } from './ytm-runtime'
 
 registerSchemes()
@@ -39,7 +40,6 @@ app.whenReady().then(async () => {
       playerCacheDir: join(userData, 'player-cache'),
     },
   })
-  lockDownYtmSession()
   watchYtmCookies(() => {
     void core.ytm.refresh()
     core.streamer?.refresh()
@@ -58,21 +58,36 @@ app.whenReady().then(async () => {
   }
 
   // The player renderer owns the audio; it lives apart from the UI so a UI
-  // reload never drops playback (PLAN §2).
+  // reload never drops playback (PLAN §2). Fallback tracks play in the hidden
+  // YouTube Music window instead; the router sends each command to the right one.
   const player = createPlayerWindow()
-  const toPlayer = (command: PlayerCommand) => {
-    if (command.type === 'load' && command.engine === 'fallback') {
-      // The hidden YTM window arrives in Phase 2. Report failure so the player moves on.
-      core.player.report({ type: 'error', message: 'Fallback engine not built yet' })
-      return
-    }
-    player.webContents.send(IPC.playerCommand, command)
-  }
+  const router = new EngineRouter({
+    player: (command) => player.webContents.send(IPC.playerCommand, command),
+    fallback: (command) => fallback.send(command),
+  })
+  const fallback = new YtmFallbackEngine(
+    (sourceId) => {
+      const source = core.library.source(sourceId)
+      return source?.kind === 'ytm' ? source.locator : undefined
+    },
+    (report) => {
+      if (router.accepts('fallback', report)) core.player.report(report)
+    },
+  )
+  lockDownYtmSession((contents) => fallback.owns(contents))
   // Connect once the page is listening (messages sent earlier are dropped), and
   // again after any reload, so it always gets the current output and fade settings.
-  player.webContents.on('did-finish-load', () => core.player.connect(toPlayer))
+  player.webContents.on('did-finish-load', () => core.player.connect((c) => router.send(c)))
   ipcMain.on(IPC.playerReport, (event, report: PlayerReport) => {
-    if (event.sender === player.webContents) core.player.report(report)
+    if (event.sender === player.webContents && router.accepts('player', report)) {
+      core.player.report(report)
+    }
+  })
+  // The fallback plays on the same device as the player renderer.
+  core.events.subscribe((event) => {
+    if (event.type !== 'output.changed') return
+    const { devices, activeDeviceId } = event.data
+    fallback.setOutput(devices.find((d) => d.deviceId === activeDeviceId)?.label ?? null)
   })
 
   let ui = createUiWindow()
@@ -102,6 +117,7 @@ app.whenReady().then(async () => {
     shuttingDown = true
     event.preventDefault()
     pageRuntime.destroy()
+    fallback.destroy()
     void Promise.allSettled([api?.close(), core.close()]).finally(() => app.exit())
   })
 })

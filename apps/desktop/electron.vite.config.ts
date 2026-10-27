@@ -15,6 +15,10 @@ export default defineConfig({
     build: {
       externalizeDeps: bundleWorkspace,
       rollupOptions: {
+        input: {
+          index: resolve(import.meta.dirname, 'src/preload/index.ts'),
+          'ytm-engine': resolve(import.meta.dirname, 'src/preload/ytm-engine.ts'),
+        },
         // Sandboxed preloads must be CommonJS.
         output: { format: 'cjs', entryFileNames: '[name].cjs' },
       },
