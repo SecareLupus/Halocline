@@ -1,0 +1,29 @@
+appId: io.github.securelupus.halocline
+productName: Halocline
+executableName: halocline
+copyright: Copyright © 2026 Desmond Duval
+directories:
+  output: release/${version}
+  buildResources: build
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - '**/*.node'
+linux:
+  target: [AppImage, deb]
+  category: AudioVideo
+  syncDesktopName: true
+  maintainer: Desmond Duval <haydre@gmail.com>
+  synopsis: Music player for live streaming
+deb:
+  packageName: halocline
+  artifactName: halocline_${version}_${arch}.${ext}
+  depends: [libnotify4, libxtst6, libnss3]
+win:
+  target: [nsis]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  license: ../../LICENSE
+publish: null

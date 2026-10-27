@@ -1,0 +1,20 @@
+{
+  "name": "@halocline/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@halocline/core": "workspace:*",
+    "@hono/node-server": "^2.1.5",
+    "@hono/zod-openapi": "^1.6.3",
+    "hono": "^4.13.14",
+    "zod": "^4.6.7"
+  }
+}

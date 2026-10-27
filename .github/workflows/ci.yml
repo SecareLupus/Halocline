@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+        if: runner.os == 'Linux'
+      - run: pnpm format:check
+        if: runner.os == 'Linux'
+      - run: pnpm licenses:check
+        if: runner.os == 'Linux'
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm dist:linux
+        if: runner.os == 'Linux'
+      - run: pnpm dist:win
+        if: runner.os == 'Windows'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: halocline-${{ runner.os }}
+          path: |
+            apps/desktop/release/*/*.AppImage
+            apps/desktop/release/*/*.deb
+            apps/desktop/release/*/*.exe
+          if-no-files-found: error
+          retention-days: 7

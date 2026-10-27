@@ -1,0 +1,35 @@
+{
+  "name": "@halocline/desktop",
+  "productName": "Halocline",
+  "desktopName": "halocline.desktop",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Desktop music player for live streaming.",
+  "license": "GPL-3.0-or-later",
+  "author": "Desmond Duval <haydre@gmail.com>",
+  "homepage": "https://github.com/SecareLupus/halocline",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
+    "dist:linux": "electron-vite build && electron-builder --linux",
+    "dist:win": "electron-vite build && electron-builder --win"
+  },
+  "dependencies": {
+    "@halocline/api": "workspace:*",
+    "@halocline/core": "workspace:*",
+    "better-sqlite3": "^13.0.3",
+    "solid-js": "^1.9.17",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "electron": "^44.9.3",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "vite": "^8.3.5",
+    "vite-plugin-solid": "^2.11.14"
+  }
+}

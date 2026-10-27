@@ -1,0 +1,66 @@
+import type { QueuePosition } from '@halocline/core'
+import { createSignal, For, Show } from 'solid-js'
+import { call } from './bridge'
+import { TrackLabel } from './Search'
+import type { AppState } from './store'
+
+export function QueueList(props: { state: AppState }) {
+  const [dragging, setDragging] = createSignal<string | null>(null)
+  const items = () => props.state.queue().items
+
+  /** Drops the dragged item after the target (or first, when dropped on the top item's upper half). */
+  const drop = (targetId: string, before: boolean) => {
+    const id = dragging()
+    setDragging(null)
+    if (!id || id === targetId) return
+    const index = items().findIndex((i) => i.id === targetId)
+    const prev = items()[index - 1]
+    const position: QueuePosition = !before
+      ? { after: targetId }
+      : prev
+        ? { after: prev.id }
+        : 'next'
+    void props.state.run(() => call('queue.move', { id, position }))
+  }
+
+  return (
+    <section class="pane">
+      <h2>Up next</h2>
+      <Show when={items().length} fallback={<p class="empty">The queue is empty.</p>}>
+        <ol class="list">
+          <For each={items()}>
+            {(item) => (
+              <li
+                draggable="true"
+                classList={{ dragging: dragging() === item.id }}
+                onDragStart={() => setDragging(item.id)}
+                onDragEnd={() => setDragging(null)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  const box = e.currentTarget.getBoundingClientRect()
+                  drop(item.id, e.clientY < box.top + box.height / 2)
+                }}
+              >
+                <TrackLabel recording={item.recording} />
+                <span class="actions">
+                  <Show when={item.origin !== 'user'}>
+                    <span class="badge">{item.requestedBy ?? item.origin}</span>
+                  </Show>
+                  <button
+                    type="button"
+                    aria-label="Remove"
+                    onClick={() =>
+                      void props.state.run(() => call('queue.remove', { id: item.id }))
+                    }
+                  >
+                    ✕
+                  </button>
+                </span>
+              </li>
+            )}
+          </For>
+        </ol>
+      </Show>
+    </section>
+  )
+}

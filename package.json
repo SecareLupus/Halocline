@@ -1,0 +1,46 @@
+{
+  "name": "halocline",
+  "private": true,
+  "type": "module",
+  "description": "Desktop music player for live streaming: local files and YouTube Music in one queue, driven by an API.",
+  "license": "GPL-3.0-or-later",
+  "packageManager": "pnpm@9.12.2",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "postinstall": "node scripts/rebuild-native.mjs",
+    "dev": "pnpm --filter @halocline/desktop dev",
+    "build": "pnpm --filter @halocline/desktop build",
+    "dist:linux": "pnpm --filter @halocline/desktop dist:linux",
+    "dist:win": "pnpm --filter @halocline/desktop dist:win",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node scripts/electron-node.mjs node_modules/vitest/vitest.mjs run",
+    "test:watch": "node scripts/electron-node.mjs node_modules/vitest/vitest.mjs",
+    "licenses:check": "node scripts/check-licenses.mjs"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "electron": "^44.9.3",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-solid": "^0.18.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "electron",
+      "esbuild"
+    ]
+  }
+}
