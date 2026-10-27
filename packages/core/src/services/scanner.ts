@@ -127,6 +127,9 @@ export class LibraryScanner {
     }
     if (this.options.watch ?? true) {
       for (const root of added) this.watchers.set(root, this.watch(root))
+      // Subscribed before the scan, so a change made in between isn't missed. Native
+      // subscription is slow on Windows, where it used to finish after start() did.
+      await Promise.all(added.map((root) => this.watchers.get(root)))
     }
 
     // Files in folders that are no longer part of the library become unavailable.

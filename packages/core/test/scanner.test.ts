@@ -40,11 +40,8 @@ function setup(watch = false) {
 const byTitle = (title: string) => core.library.search(title)[0]
 const sourcesOf = (title: string) => core.library.sources(byTitle(title)!.id)
 
-/**
- * How long one watcher round trip may take: file event, debounce, then a scan in
- * a worker. Usually 1 to 2 s, but Windows CI runners have taken over 5 s.
- */
-const WATCH_TIMEOUT_MS = 15_000
+/** How long one watcher round trip (file event, debounce, scan) may take on a slow CI runner. */
+const WATCH_TIMEOUT_MS = 10_000
 
 describe('LibraryScanner', () => {
   it('reads tags, duration and cover art, and skips non-audio and hidden files', async () => {
