@@ -14,6 +14,8 @@ export interface YtmCatalog {
 export interface YtmProviderOptions {
   /** Cookie header for music.youtube.com from the signed-in session, if any. */
   cookie?: () => Promise<string | undefined>
+  /** Whether a playback engine is attached; without one YTM tracks are skipped. */
+  playback?: boolean
 }
 
 const VIDEO_ID = /^[\w-]{11}$/
@@ -34,12 +36,19 @@ const isSignedIn = (cookie: string | undefined) =>
  */
 export class YtmProvider implements YtmCatalog {
   private session: Promise<Innertube> | null = null
-  private current: YtmStatus = { signedIn: false, account: null, playback: false, lastError: null }
+  private current: YtmStatus
 
   constructor(
     private readonly events: EventBus,
     private readonly options: YtmProviderOptions = {},
-  ) {}
+  ) {
+    this.current = {
+      signedIn: false,
+      account: null,
+      playback: options.playback ?? false,
+      lastError: null,
+    }
+  }
 
   status(): YtmStatus {
     return this.current

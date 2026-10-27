@@ -59,6 +59,12 @@ importers:
       better-sqlite3:
         specifier: ^13.0.3
         version: 13.0.3
+      bgutils-js:
+        specifier: 4.0.3
+        version: 4.0.3
+      googlevideo:
+        specifier: 5.0.1
+        version: 5.0.1
       solid-js:
         specifier: ^1.9.17
         version: 1.9.17
@@ -111,6 +117,12 @@ importers:
       better-sqlite3:
         specifier: ^13.0.3
         version: 13.0.3
+      bgutils-js:
+        specifier: 4.0.3
+        version: 4.0.3
+      googlevideo:
+        specifier: 5.0.1
+        version: 5.0.1
       music-metadata:
         specifier: ~12.2.3
         version: 12.2.3
@@ -827,6 +839,9 @@ packages:
     resolution: {integrity: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==}
     engines: {node: '>=22'}
 
+  bgutils-js@4.0.3:
+    resolution: {integrity: sha512-nvhrzqRYqFcC3AJbf1fENc/jzyMk95wH9UC9ruQzTZCq+itYWuHi2a9leK/bC1lLfi+R4a28wJZxpD5KiTFf+w==}
+
   bluebird@3.7.2:
     resolution: {integrity: sha512-XpNj6GDQzdfW+r2Wnn7xiSAd7TM3jzkxGXBGTtWKuSXv1xUV+azxAm8jdWZN06QTQk+2N2XB9jRDkvbmQmcRtg==}
 
@@ -1299,6 +1314,9 @@ packages:
   globalthis@1.0.4:
     resolution: {integrity: sha512-DpLKbNU4WylpxJykQujfCcwYWiV/Jhm50Goo0wrVILAv5jOr9d+H+UR3PhSCD2rCCEIg0uc+G+muBTwD54JhDQ==}
     engines: {node: '>= 0.4'}
+
+  googlevideo@5.0.1:
+    resolution: {integrity: sha512-jbQtretPuwNXUJzjUUaIap6z8cFGMu1tnUi02bhCgcENPoAUQvi4KRRVKFvseZSiDVJ0ocU7gCY2cAfWrwDS9g==}
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -3073,6 +3091,8 @@ snapshots:
     dependencies:
       node-addon-api: 8.9.2
 
+  bgutils-js@4.0.3: {}
+
   bluebird@3.7.2: {}
 
   boolean@3.2.0:
@@ -3641,6 +3661,10 @@ snapshots:
       define-properties: 1.2.1
       gopd: 1.2.0
     optional: true
+
+  googlevideo@5.0.1:
+    dependencies:
+      '@bufbuild/protobuf': 2.16.0
 
   gopd@1.2.0: {}
 

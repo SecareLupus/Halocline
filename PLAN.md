@@ -124,6 +124,16 @@ engines.
 **Engine 1: direct.** `youtubei.js` player data, plus a PO token (`bgutils-js`), plus SABR/UMP
 handling (`googlevideo`). The stream service serves the result as a plain byte stream behind
 `track://`. Ads don't apply on this path because we fetch the audio stream ourselves.
+- Google's scripts (the BotGuard challenge and the player's URL decipher) run in a hidden,
+  sandboxed window on www.youtube.com, on the YTM session, with no preload and no Node. They never
+  run in the main process.
+- The BotGuard challenge comes from the youtube.com page, as in the web player. A generic challenge
+  from the `Create` endpoint mints tokens the server never accepts (stuck at "pending").
+- The PO token is minted up front and bound to the videoId. The integrity token is reused until its
+  TTL runs out.
+- Every direct stream goes through the track cache, so a track plays while it downloads and
+  seeking works. Cold start is about 6 to 8 s, most of it a backoff the server asks for on the first
+  SABR request. Prefetch hides that for queued tracks.
 
 **Engine 2: hidden window.** music.youtube.com in a hidden `BrowserWindow`. Its job is to load a
 videoId, play it, and report position and end-of-track. Its output goes to the same selected
@@ -141,7 +151,10 @@ device. Crossfade between the engines uses timed gain ramps over IPC.
 
 **Prefetch cache:**
 - Once the current track starts, prefetch the next cloud track in the queue to an LRU disk cache.
+  When the player cues a track for the direct engine, it's prefetched.
 - Prefetching via the direct engine only; the fallback engine can't prefetch.
+- The cache lives in `<userData>/track-cache`, defaults to 1 GB, and never evicts a track used in
+  the last 15 minutes.
 - This hides network blips. The analysis worker also uses the cached file.
 
 **Health indicator:**
@@ -155,7 +168,8 @@ device. Crossfade between the engines uses timed gain ramps over IPC.
 
 **Stream self-test (supports fast fixes):**
 - `pnpm test:stream` runs the direct engine against a small, fixed set of videoIds and reports
-  what failed at which step (player data, PO token, decipher, SABR).
+  what failed at which step (player data, PO token, decipher, SABR). It runs the built app with
+  `--test-stream` and reads each track to the end, past the one-minute cold-start allowance.
 - Run in CI on a schedule, a failure opens an issue with that output. An agent picking up the issue
   has a reproducible failure and a clear definition of "fixed".
 - This is a canary, not a decision gate.

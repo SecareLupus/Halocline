@@ -12,4 +12,8 @@
   validate with the same zod schemas. A feature lands in both.
 - Queue items are addressed by stable IDs, never indexes. Mutations bump `revision`.
 - Anything bundled into the shipped app goes in `dependencies` so `pnpm licenses:check` sees it.
+- `pnpm test:stream` builds the app and runs the direct YTM engine against fixed tracks
+  (`halocline --test-stream`), reporting the failing step. It needs the network, so it's not
+  part of `pnpm test`. Run it after touching `providers/po-token.ts`, `providers/ytm-stream.ts`
+  or `stream/track-cache.ts`.
 - Before calling something done: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.

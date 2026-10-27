@@ -41,7 +41,9 @@ export function handleTrackProtocol(core: Core): void {
         // Forward Range headers so seeking works.
         return net.fetch(pathToFileURL(source.locator).toString(), { headers: request.headers })
       case 'ytm':
-        return new Response('YouTube Music streaming is not implemented yet', { status: 501 })
+        // Served from the track cache, which downloads on first request (PLAN §4).
+        if (!core.tracks) return new Response('No YouTube Music engine', { status: 501 })
+        return core.tracks.read(source.locator, request.headers.get('range'))
     }
   })
 }

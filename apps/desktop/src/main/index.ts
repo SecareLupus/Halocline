@@ -6,26 +6,44 @@ import { IPC } from '../shared/ipc'
 import { registerIpc } from './ipc'
 import { handleArtworkProtocol, handleTrackProtocol, registerSchemes } from './protocol'
 import { runScanInWorker } from './scan-runner'
+import { runStreamSelfTest } from './stream-self-test'
 import { createPlayerWindow, createUiWindow } from './windows'
 import { lockDownYtmSession, watchYtmCookies, ytmCookie } from './ytm-auth'
+import { YtmPageRuntime } from './ytm-runtime'
 
 registerSchemes()
 
+// `--test-stream` runs the direct-engine canary and exits (PLAN §4).
+const selfTest = process.argv.includes('--test-stream')
+
 // A second launch just focuses the running one (see 'second-instance').
-const isPrimary = app.requestSingleInstanceLock()
+const isPrimary = selfTest || app.requestSingleInstanceLock()
 if (!isPrimary) app.quit()
 
 app.whenReady().then(async () => {
+  if (selfTest) {
+    app.exit(await runStreamSelfTest())
+    return
+  }
   if (!isPrimary) return
   const userData = app.getPath('userData')
   const artworkDir = join(userData, 'artwork')
+  const pageRuntime = new YtmPageRuntime()
   const core = createCore({
     dbPath: join(userData, 'halocline.db'),
     scanner: { artworkDir, run: runScanInWorker },
     ytm: { cookie: ytmCookie },
+    stream: {
+      runtime: pageRuntime,
+      cacheDir: join(userData, 'track-cache'),
+      playerCacheDir: join(userData, 'player-cache'),
+    },
   })
   lockDownYtmSession()
-  watchYtmCookies(() => void core.ytm.refresh())
+  watchYtmCookies(() => {
+    void core.ytm.refresh()
+    core.streamer?.refresh()
+  })
   void core.ytm.refresh()
   handleTrackProtocol(core)
   handleArtworkProtocol(artworkDir)
@@ -83,6 +101,7 @@ app.whenReady().then(async () => {
     if (shuttingDown) return
     shuttingDown = true
     event.preventDefault()
+    pageRuntime.destroy()
     void Promise.allSettled([api?.close(), core.close()]).finally(() => app.exit())
   })
 })

@@ -29,9 +29,9 @@ describe('chooseSource', () => {
     )
   })
   it('uses the cache, then direct, then fallback', () => {
-    expect(chooseSource([ytm], { cached: new Set(['ytm']), directAllowed: true })?.engine).toBe(
-      'cache',
-    )
+    expect(
+      chooseSource([ytm], { isCached: (s) => s.id === 'ytm', directAllowed: true })?.engine,
+    ).toBe('cache')
     expect(chooseSource([ytm], { directAllowed: true })?.engine).toBe('direct')
     expect(chooseSource([ytm], { directAllowed: false })?.engine).toBe('fallback')
   })

@@ -23,6 +23,8 @@
     "@halocline/core": "workspace:*",
     "@parcel/watcher": "^2.6.0",
     "better-sqlite3": "^13.0.3",
+    "bgutils-js": "4.0.3",
+    "googlevideo": "5.0.1",
     "solid-js": "^1.9.17",
     "youtubei.js": "18.3.0",
     "zod": "^4.6.7"

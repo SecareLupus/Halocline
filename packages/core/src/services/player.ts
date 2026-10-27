@@ -8,8 +8,10 @@ import type {
   PlayerState,
   QueueItem,
   Settings,
+  Source,
 } from '../schemas'
 import { chooseSource } from '../stream/source-choice'
+import type { TrackStore } from '../stream/track-cache'
 import type { HealthService } from './health'
 import type { LibraryService } from './library'
 import type { YtmCatalog } from '../providers/ytm'
@@ -77,6 +79,7 @@ export class PlayerService {
     private readonly settings: SettingsService,
     private readonly health: HealthService,
     private readonly ytm: YtmCatalog,
+    private readonly tracks: TrackStore | null,
     private readonly events: EventBus,
     private readonly now: () => number = Date.now,
   ) {
@@ -277,23 +280,30 @@ export class PlayerService {
   /**
    * Tells the player what comes next so it can preload it: the current track
    * again on repeat-one, otherwise the head of the queue. The fallback engine
-   * can't preload, so tracks headed there aren't cued.
+   * can't preload, so tracks headed there aren't cued. A cloud track cued for
+   * the direct engine is prefetched to the cache (PLAN §4).
    */
   private recue(): void {
     if (!this.current) return
     const next = this.state.repeat === 'one' ? this.current : this.queue.peek()
     const load = next && this.prepare(next)
     const usable = load && load.engine !== 'fallback' ? { item: next, load } : null
+    if (usable?.load.engine === 'direct') {
+      const source = this.library.source(usable.load.nowPlaying.sourceId)
+      if (source) this.tracks?.prefetch(source)
+    }
     if (usable?.item.id === this.cued?.item.id && usable?.load.url === this.cued?.load.url) return
     this.cued = usable
     this.send({ type: 'cue', next: usable?.load ?? null })
   }
 
   private prepare(item: QueueItem, forceFallback = false): TrackLoad | undefined {
+    const tracks = this.tracks
     const choice = chooseSource(this.library.sources(item.recordingId), {
       pinnedSourceId: item.pinnedSourceId,
       directAllowed: !forceFallback && this.health.breaker.allowsDirect,
       ytmPlayable: this.ytm.status().playback,
+      ...(tracks && { isCached: (source: Source) => tracks.isCached(source) }),
     })
     if (!choice) return undefined
     return {

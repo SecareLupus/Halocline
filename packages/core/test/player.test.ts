@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Core, PlayerCommand } from '../src'
+import { PlayerService, type Core, type PlayerCommand, type Source, type TrackStore } from '../src'
 import { song, testCore } from './helpers'
 
 let core: Core
@@ -154,5 +154,35 @@ describe('PlayerService', () => {
     }
     core.player.report({ type: 'output', state })
     expect(core.player.getOutput()).toEqual(state)
+  })
+
+  it('prefetches a cued cloud track and plays it from the cache once there', () => {
+    core = testCore({ ytmPlayback: true })
+    const cached = new Set<string>()
+    const prefetched: string[] = []
+    const tracks: TrackStore = {
+      isCached: (source: Source) => cached.has(source.locator),
+      prefetch: (source: Source) => void prefetched.push(source.locator),
+    }
+    const { queue, library, settings, health, ytm, events } = core
+    const player = new PlayerService(queue, library, settings, health, ytm, tracks, events)
+    const sent: PlayerCommand[] = []
+    player.connect((c) => sent.push(c))
+    const enqueue = (title: string, kind: 'local' | 'ytm') => {
+      const rec = song(core, title)
+      core.library.addSource(rec.id, { kind, locator: title })
+      return core.queue.add({ recordingId: rec.id, origin: 'user' })
+    }
+
+    enqueue('local-one', 'local')
+    enqueue('cloudSong01', 'ytm')
+    player.patch({ playing: true })
+    expect(prefetched).toEqual(['cloudSong01'])
+    const cue = sent.findLast((c) => c.type === 'cue')
+    expect(cue?.type === 'cue' && cue.next?.engine).toBe('direct')
+
+    cached.add('cloudSong01')
+    player.report({ type: 'ended' })
+    expect(player.get().current).toMatchObject({ engine: 'cache' })
   })
 })

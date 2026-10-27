@@ -8,13 +8,13 @@ export interface SourceChoice {
 /**
  * Picks where to play a recording from, at play time (PLAN §3): the pinned
  * source if set, otherwise local, then cache, then YTM direct, then the YTM
- * fallback window. `cached` is the set of source IDs in the prefetch cache.
+ * fallback window. `isCached` says whether a source is in the prefetch cache.
  */
 export function chooseSource(
   sources: Source[],
   opts: {
     pinnedSourceId?: string | null
-    cached?: ReadonlySet<string>
+    isCached?: (source: Source) => boolean
     directAllowed: boolean
     /** False while no YTM engine exists; YTM sources are then skipped, not tried. */
     ytmPlayable?: boolean
@@ -28,7 +28,7 @@ export function chooseSource(
 
   for (const source of ordered) {
     if (source.kind === 'local') return { source, engine: 'local' }
-    if (opts.cached?.has(source.id)) return { source, engine: 'cache' }
+    if (opts.isCached?.(source)) return { source, engine: 'cache' }
     if (source.kind === 'ytm') return { source, engine: opts.directAllowed ? 'direct' : 'fallback' }
   }
   return undefined
