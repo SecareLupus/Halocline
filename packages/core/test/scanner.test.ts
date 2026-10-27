@@ -40,6 +40,12 @@ function setup(watch = false) {
 const byTitle = (title: string) => core.library.search(title)[0]
 const sourcesOf = (title: string) => core.library.sources(byTitle(title)!.id)
 
+/**
+ * How long one watcher round trip may take: file event, debounce, then a scan in
+ * a worker. Usually 1 to 2 s, but Windows CI runners have taken over 5 s.
+ */
+const WATCH_TIMEOUT_MS = 15_000
+
 describe('LibraryScanner', () => {
   it('reads tags, duration and cover art, and skips non-audio and hidden files', async () => {
     writeWav(
@@ -164,20 +170,25 @@ describe('LibraryScanner', () => {
     expect(states.at(-1)).toBe('idle')
   })
 
-  it('picks up added, changed and deleted files while watching', async () => {
-    writeWav(join(music, 'a.wav'), { title: 'Alpha' })
-    await setup(true).scanner.start()
+  it(
+    'picks up added, changed and deleted files while watching',
+    async () => {
+      writeWav(join(music, 'a.wav'), { title: 'Alpha' })
+      await setup(true).scanner.start()
 
-    writeWav(join(music, 'sub/b.wav'), { title: 'Bravo' })
-    await vi.waitFor(() => expect(byTitle('bravo')).toBeDefined(), { timeout: 5000 })
+      writeWav(join(music, 'sub/b.wav'), { title: 'Bravo' })
+      await vi.waitFor(() => expect(byTitle('bravo')).toBeDefined(), { timeout: WATCH_TIMEOUT_MS })
 
-    writeWav(join(music, 'a.wav'), { title: 'Alpha Prime' })
-    utimesSync(join(music, 'a.wav'), new Date(), new Date(Date.now() + 5000))
-    await vi.waitFor(() => expect(byTitle('prime')).toBeDefined(), { timeout: 5000 })
+      writeWav(join(music, 'a.wav'), { title: 'Alpha Prime' })
+      utimesSync(join(music, 'a.wav'), new Date(), new Date(Date.now() + 5000))
+      await vi.waitFor(() => expect(byTitle('prime')).toBeDefined(), { timeout: WATCH_TIMEOUT_MS })
 
-    rmSync(join(music, 'sub'), { recursive: true })
-    await vi.waitFor(() => expect(sourcesOf('bravo')[0]?.available).toBe(false), { timeout: 5000 })
-    expect(existsSync(join(music, 'a.wav'))).toBe(true)
-    // Three watcher round trips: slower on Windows than the default 5 s test budget.
-  }, 20_000)
+      rmSync(join(music, 'sub'), { recursive: true })
+      await vi.waitFor(() => expect(sourcesOf('bravo')[0]?.available).toBe(false), {
+        timeout: WATCH_TIMEOUT_MS,
+      })
+      expect(existsSync(join(music, 'a.wav'))).toBe(true)
+    },
+    4 * WATCH_TIMEOUT_MS,
+  )
 })
