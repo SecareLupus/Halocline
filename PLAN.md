@@ -126,9 +126,22 @@ Phase 3 as built:
   - Turning the mode on skips an untagged song that's playing.
 - **Pinning:** queue items carry their `sources`, and the queue shows a "Play from" menu (Auto,
   Local file, YouTube Music) when there's more than one.
-- **Not built:** manual merge or split of two existing recordings, for when matching gets it
-  wrong. Two recordings that already exist separately (e.g. queued before matching existed) stay
-  separate.
+- **Merging and splitting by hand,** for when matching gets it wrong. In the UI, both are in a
+  library row's "⋯" menu. In the API, `POST /v1/library/recordings/{id}/merge` and `…/split`.
+  - **Merge** duplicates into one recording:
+    - their sources (two files of the same song are allowed) and audio analysis move over;
+    - missing details are filled in;
+    - in-library and stream-safe are on if any of them had them, tags join and play counts add.
+    - Queued items play the kept recording. A merged recording's ID stays usable as an alias of
+      the kept one (`recording_aliases`), so API clients and the player don't break.
+  - **Split** sources that are a different song onto a new recording:
+    - It starts with the original's details and tags, but not its stream-safe flag: it may be a
+      different song, so it has to be tagged again.
+    - Each side then takes its details from its own sources: a local file's tags (re-read by the
+      scan that follows), otherwise YouTube Music's.
+    - Queue items pinned to a moved source go back to Auto. Cached link resolutions to the
+      original are dropped.
+    - At least one source stays on the original.
 
 Storage:
 - SQLite (`better-sqlite3`) with FTS5 over title, artist and album.
@@ -312,6 +325,7 @@ the domain layer uses (Hono + `@hono/zod-openapi`, with interactive docs served 
 | `GET /v1/search?q=&scope=library\|ytm\|all` | unified results; each carries `recordingId` (or a provider ref) and its available sources |
 | `POST /v1/resolve` | link to a match or candidates, without enqueueing |
 | `GET /v1/library/recordings` · `PATCH /v1/library/recordings/{id}` | browse; add or remove from library; set `stream_safe` and tags (with a bulk variant) |
+| `POST /v1/library/recordings/{id}/merge` · `/split` | merge duplicates into this recording; split sources off onto a new one (§3) |
 | `GET /v1/artwork/{recordingId}?size=` | album art: art embedded in local files is extracted at scan time, YTM thumbnails are proxied and resized. Cached either way |
 | `GET /v1/health` | engine status, last errors, scan progress |
 | `GET /v1/settings` · `PATCH /v1/settings` | stream-safe mode, autoplay options, and more |

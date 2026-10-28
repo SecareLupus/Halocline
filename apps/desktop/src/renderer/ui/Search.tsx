@@ -1,6 +1,14 @@
-import type { LinkProvider, Recording, Resolution, SearchResult, YtmSong } from '@halocline/core'
+import type {
+  LinkProvider,
+  Recording,
+  Resolution,
+  SearchResult,
+  Source,
+  YtmSong,
+} from '@halocline/core'
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js'
 import { call } from './bridge'
+import { bySourceOrder, sourceLabel } from './sources'
 import type { AppState } from './store'
 
 /** YouTube Music is searched over the network, so wait for typing to pause. */
@@ -14,12 +22,14 @@ export function Search(props: { state: AppState }) {
   const hasFolders = () => (props.state.settings()?.library.folders.length ?? 0) > 0
   const library = () => results().flatMap((r) => (r.kind === 'library' ? [r.recording] : []))
   const cloud = () => results().flatMap((r) => (r.kind === 'ytm' ? [r.song] : []))
-  const cloudOnly = () =>
-    new Set(
-      results().flatMap((r) =>
-        r.kind === 'library' && !r.sources.some((s) => s.kind === 'local') ? [r.recording.id] : [],
-      ),
-    )
+  const sourcesOf = () =>
+    new Map(results().flatMap((r) => (r.kind === 'library' ? [[r.recording.id, r.sources]] : [])))
+  const cloudOnly = (id: string) =>
+    !sourcesOf()
+      .get(id)
+      ?.some((s) => s.kind === 'local')
+  /** The recording a duplicate will be merged into, picked from a row's menu. */
+  const [mergeInto, setMergeInto] = createSignal<Recording | null>(null)
 
   // Only the latest search may set results, however the responses arrive.
   let latest = 0
@@ -78,6 +88,17 @@ export function Search(props: { state: AppState }) {
   const saveYtm = (song: YtmSong) => props.state.run(() => call('library.saveYtm', { song }))
   const setStreamSafe = (recording: Recording, streamSafe: boolean) =>
     props.state.run(() => call('library.edit', { id: recording.id, changes: { streamSafe } }))
+  const merge = (into: Recording, from: Recording) =>
+    props.state.run(async () => {
+      await call('library.merge', { id: into.id, from: [from.id] })
+      setMergeInto(null)
+    })
+  // Merge and split live in one menu per row, to keep the row's buttons few.
+  const onMenu = (r: Recording, choice: string) => {
+    if (choice === 'merge') setMergeInto(r)
+    else if (choice)
+      void props.state.run(() => call('library.split', { id: r.id, sourceIds: [choice] }))
+  }
   const allSafe = () => library().every((r) => r.streamSafe)
   const setAllStreamSafe = (streamSafe: boolean) => {
     const ids = library().map((r) => r.id)
@@ -106,6 +127,19 @@ export function Search(props: { state: AppState }) {
             resolution={r()}
             enqueue={(input, position) => void enqueueInput(input, position)}
           />
+        )}
+      </Show>
+      <Show when={mergeInto()}>
+        {(into) => (
+          <div class="results-bar merge-bar">
+            <span>
+              Merging a duplicate into <strong>{into().title}</strong>: search for it if needed,
+              then press its Merge button.
+            </span>
+            <button type="button" onClick={() => setMergeInto(null)}>
+              Cancel
+            </button>
+          </div>
         )}
       </Show>
       <Show
@@ -138,7 +172,7 @@ export function Search(props: { state: AppState }) {
                 <li>
                   <TrackLabel track={r} />
                   <span class="actions">
-                    <Show when={cloudOnly().has(r.id)}>
+                    <Show when={cloudOnly(r.id)}>
                       <span class="badge" title="No local file; plays from YouTube Music">
                         cloud
                       </span>
@@ -159,6 +193,30 @@ export function Search(props: { state: AppState }) {
                     <button type="button" onClick={() => void enqueue(r, 'end')}>
                       Add
                     </button>
+                    <Show
+                      when={mergeInto()}
+                      fallback={
+                        <RecordingMenu
+                          sources={sourcesOf().get(r.id) ?? []}
+                          onChoose={(choice) => onMenu(r, choice)}
+                        />
+                      }
+                    >
+                      {(into) => (
+                        <Show
+                          when={into().id !== r.id}
+                          fallback={<span class="badge">keeping</span>}
+                        >
+                          <button
+                            type="button"
+                            title={`Merge into "${into().title}"`}
+                            onClick={() => void merge(into(), r)}
+                          >
+                            Merge
+                          </button>
+                        </Show>
+                      )}
+                    </Show>
                   </span>
                 </li>
               )}
@@ -196,6 +254,36 @@ export function Search(props: { state: AppState }) {
         </Show>
       </Show>
     </section>
+  )
+}
+
+/**
+ * Fixes for matching (PLAN §3): merge a duplicate into this recording, or split a
+ * source that's a different song off onto its own.
+ */
+function RecordingMenu(props: { sources: Source[]; onChoose: (choice: string) => void }) {
+  return (
+    <select
+      class="more"
+      aria-label="More"
+      title="Merge a duplicate, or split off a source that's a different song"
+      value=""
+      onChange={(e) => {
+        const choice = e.currentTarget.value
+        e.currentTarget.value = ''
+        props.onChoose(choice)
+      }}
+    >
+      <option value="">⋯</option>
+      <option value="merge">Merge a duplicate into this…</option>
+      <Show when={props.sources.length > 1}>
+        <For each={bySourceOrder(props.sources)}>
+          {(source) => (
+            <option value={source.id}>Split off: {sourceLabel(source, props.sources)}</option>
+          )}
+        </For>
+      </Show>
+    </select>
   )
 }
 

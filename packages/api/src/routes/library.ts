@@ -4,10 +4,13 @@ import {
   Id,
   LibraryPage,
   LibrarySort,
+  MergeRecordings,
   Recording,
   RecordingDetail,
   RecordingPatch,
   ScanStatus,
+  SplitRecording,
+  SplitResult,
   Tag,
   type Core,
 } from '@halocline/core'
@@ -165,6 +168,65 @@ export function registerLibrary(app: OpenAPIHono<ApiEnv>, core: Core) {
       const recording = await core.catalog.save(c.req.valid('json').input)
       return c.json(core.library.detail(recording.id), 200)
     },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/library/recordings/{id}/merge',
+      tags: ['library'],
+      summary: 'Merge recordings of the same song into this one',
+      description:
+        'For duplicates matching missed (PLAN §3). Their sources move over, missing details ' +
+        'are filled in, in-library and stream-safe carry over if any had them, tags join and ' +
+        'play counts add up. Queued items play this recording. The merged IDs keep working ' +
+        'and give this recording.',
+      middleware: [requireScope('library:write')],
+      request: {
+        params: RecordingParams,
+        body: { content: { 'application/json': { schema: MergeRecordings } }, required: true },
+      },
+      responses: {
+        200: {
+          description: 'The merged recording',
+          content: { 'application/json': { schema: RecordingDetail } },
+        },
+        ...authErrors,
+        400: errorResponse('Nothing to merge'),
+        404: errorResponse('No such recording'),
+      },
+    }),
+    (c) => c.json(core.catalog.merge(c.req.valid('param').id, c.req.valid('json').from), 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/library/recordings/{id}/split',
+      tags: ['library'],
+      summary: 'Split sources off onto a new recording',
+      description:
+        'For two songs matching merged wrongly (PLAN §3). The sources named move to a new ' +
+        "recording, which isn't stream-safe until tagged. Each side then takes its details " +
+        "from its own sources: a local file's tags (on the scan that follows), otherwise " +
+        "YouTube Music's. Queue items pinned to a moved source go back to automatic.",
+      middleware: [requireScope('library:write')],
+      request: {
+        params: RecordingParams,
+        body: { content: { 'application/json': { schema: SplitRecording } }, required: true },
+      },
+      responses: {
+        201: {
+          description: 'Both recordings',
+          content: { 'application/json': { schema: SplitResult } },
+        },
+        ...authErrors,
+        400: errorResponse('Every source would move'),
+        404: errorResponse('No such recording or source'),
+      },
+    }),
+    async (c) =>
+      c.json(await core.catalog.split(c.req.valid('param').id, c.req.valid('json').sourceIds), 201),
   )
 
   app.openapi(

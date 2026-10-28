@@ -2,11 +2,13 @@ import {
   BulkRecordingPatch,
   DomainError,
   Id,
+  MergeRecordings,
   PlayerPatch,
   QueuePosition,
   RecordingPatch,
   Scope,
   SettingsPatch,
+  SplitRecording,
   YtmSong,
   type Core,
 } from '@halocline/core'
@@ -77,6 +79,14 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
     'library.editMany': (a) => {
       const { ids, changes } = BulkRecordingPatch.parse(a)
       return core.library.editMany(ids, changes)
+    },
+    'library.merge': (a) => {
+      const { id, from } = z.object({ id: Id }).extend(MergeRecordings.shape).parse(a)
+      return core.catalog.merge(id, from)
+    },
+    'library.split': (a) => {
+      const { id, sourceIds } = z.object({ id: Id }).extend(SplitRecording.shape).parse(a)
+      return core.catalog.split(id, sourceIds)
     },
     'library.addFolder': async () => {
       const window = BrowserWindow.getFocusedWindow()

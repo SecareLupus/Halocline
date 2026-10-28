@@ -106,4 +106,12 @@ export const migrations: string[] = [
     resolved_at TEXT NOT NULL
   );
   `,
+  /* sql */ `
+  -- IDs of recordings merged into another (PLAN §3), so they keep working.
+  CREATE TABLE recording_aliases (
+    id           TEXT PRIMARY KEY,
+    recording_id TEXT NOT NULL REFERENCES recordings(id) ON DELETE CASCADE
+  );
+  CREATE INDEX recording_aliases_recording ON recording_aliases(recording_id);
+  `,
 ]

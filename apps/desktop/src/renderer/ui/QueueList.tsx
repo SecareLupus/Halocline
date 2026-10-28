@@ -1,12 +1,9 @@
-import type { QueuePosition, SourceKind } from '@halocline/core'
+import type { QueuePosition } from '@halocline/core'
 import { createSignal, For, Show } from 'solid-js'
 import { call } from './bridge'
 import { TrackLabel } from './Search'
+import { bySourceOrder, sourceLabel } from './sources'
 import type { AppState } from './store'
-
-const SOURCE_LABELS: Record<SourceKind, string> = { local: 'Local file', ytm: 'YouTube Music' }
-/** The play-time preference order (PLAN §3), so the menu reads the same way. */
-const SOURCE_ORDER: Record<SourceKind, number> = { local: 0, ytm: 1 }
 
 export function QueueList(props: { state: AppState }) {
   const [dragging, setDragging] = createSignal<string | null>(null)
@@ -70,14 +67,10 @@ export function QueueList(props: { state: AppState }) {
                       }}
                     >
                       <option value="">Auto</option>
-                      <For
-                        each={[...item.sources].sort(
-                          (a, b) => SOURCE_ORDER[a.kind] - SOURCE_ORDER[b.kind],
-                        )}
-                      >
+                      <For each={bySourceOrder(item.sources)}>
                         {(source) => (
                           <option value={source.id} disabled={!source.available}>
-                            {SOURCE_LABELS[source.kind]}
+                            {sourceLabel(source, item.sources)}
                           </option>
                         )}
                       </For>

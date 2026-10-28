@@ -112,6 +112,36 @@ export class QueueService {
     return this.get(id)
   }
 
+  /** After a merge (PLAN §3): items for the merged recordings now play the kept one. */
+  repoint(fromIds: string[], toId: string): void {
+    const marks = fromIds.map(() => '?').join(', ')
+    const { n } = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM queue_items WHERE recording_id IN (${marks})`)
+      .get(...fromIds) as { n: number }
+    if (!n) return
+    this.mutate(undefined, () => {
+      this.db
+        .prepare(`UPDATE queue_items SET recording_id = ? WHERE recording_id IN (${marks})`)
+        .run(toId, ...fromIds)
+    })
+  }
+
+  /** After a split: items pinned to a source that moved to another recording go back to Auto. */
+  unpin(sourceIds: string[]): void {
+    const marks = sourceIds.map(() => '?').join(', ')
+    const { n } = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM queue_items WHERE pinned_source_id IN (${marks})`)
+      .get(...sourceIds) as { n: number }
+    if (!n) return
+    this.mutate(undefined, () => {
+      this.db
+        .prepare(
+          `UPDATE queue_items SET pinned_source_id = NULL WHERE pinned_source_id IN (${marks})`,
+        )
+        .run(...sourceIds)
+    })
+  }
+
   remove(id: string, expectedRevision?: number): void {
     this.mutate(expectedRevision, () => {
       this.detach(id)

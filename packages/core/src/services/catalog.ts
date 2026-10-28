@@ -2,8 +2,17 @@ import { DomainError } from '../errors'
 import type { YtmCatalog } from '../providers/ytm'
 import { candidateSong, type LinkResolver } from '../resolve/resolver'
 import { looksLikeUrl } from '../resolve/links'
-import type { Recording, Resolution, ResolveCandidate, SearchResult, YtmSong } from '../schemas'
+import type {
+  Recording,
+  RecordingDetail,
+  Resolution,
+  ResolveCandidate,
+  SearchResult,
+  SplitResult,
+  YtmSong,
+} from '../schemas'
 import type { LibraryService } from './library'
+import type { QueueService } from './queue'
 
 export type SearchScope = 'library' | 'ytm' | 'all'
 
@@ -24,7 +33,54 @@ export class CatalogService {
     private readonly library: LibraryService,
     private readonly ytm: YtmCatalog,
     private readonly links: LinkResolver,
+    private readonly queue: QueueService,
+    /** Re-reads local files, through the scanner. */
+    private readonly rescan: (paths: string[]) => Promise<void>,
   ) {}
+
+  /**
+   * Merges recordings that are the same song into `intoId` (PLAN §3), for when
+   * matching missed it. Queued items for the merged ones play the kept one.
+   */
+  merge(intoId: string, fromIds: string[]): RecordingDetail {
+    const { into, from } = this.library.merge(intoId, fromIds, (ids, id) =>
+      this.queue.repoint(ids, id),
+    )
+    this.library.notifyChanged([into.id, ...from])
+    return this.library.detail(into.id)
+  }
+
+  /**
+   * Splits sources off onto a new recording (PLAN §3), for when matching merged
+   * two different songs. Each side then takes its details from its own sources:
+   * a local file's tags, otherwise YouTube Music's.
+   */
+  async split(recordingId: string, sourceIds: string[]): Promise<SplitResult> {
+    const { original, split } = this.library.transaction(() => {
+      const result = this.library.split(recordingId, sourceIds)
+      this.queue.unpin(sourceIds)
+      return result
+    })
+    await Promise.all([original.id, split.id].map((id) => this.refreshDetails(id)))
+    this.library.notifyChanged([original.id, split.id])
+    return { original: this.library.detail(original.id), split: this.library.detail(split.id) }
+  }
+
+  private async refreshDetails(recordingId: string): Promise<void> {
+    const sources = this.library.sources(recordingId)
+    const local = sources.filter((s) => s.kind === 'local')
+    if (local.length) {
+      // The scan updates the recording from the file's tags when it gets to it.
+      this.library.rereadLocal(local.map((s) => s.id))
+      void this.rescan(local.map((s) => s.locator)).catch(() => {})
+      return
+    }
+    const ytm = sources.find((s) => s.kind === 'ytm')
+    const song = ytm && (await this.ytm.getSong(ytm.locator).catch(() => undefined))
+    if (!song) return
+    const { title, artists, album, durationMs, artwork } = song
+    this.library.update(recordingId, { title, artists, album, durationMs, artwork })
+  }
 
   /** Library hits first (PLAN §1), then YTM songs that aren't already among them. */
   async search(query: string, scope: SearchScope = 'all', limit = 25): Promise<SearchResult[]> {

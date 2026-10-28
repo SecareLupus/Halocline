@@ -104,6 +104,51 @@ describe('library routes', () => {
   })
 })
 
+describe('merge and split routes', () => {
+  it('merges duplicates and splits them apart again, needing library:write', async () => {
+    const token = tokenFor(['library:write'])
+    const keep = song('Halo')
+    const dupe = song('Halo (copy)')
+    core.library.addSource(keep.id, { kind: 'local', locator: '/music/halo.flac' })
+    const ytm = core.library.addSource(dupe.id, { kind: 'ytm', locator: 'XXXXXXXXXXX' })
+
+    expect(
+      (
+        await call('POST', `/v1/library/recordings/${keep.id}/merge`, tokenFor(['read']), {
+          from: [dupe.id],
+        })
+      ).res.status,
+    ).toBe(403)
+    const merged = await call('POST', `/v1/library/recordings/${keep.id}/merge`, token, {
+      from: [dupe.id],
+    })
+    expect(merged.res.status).toBe(200)
+    expect(merged.json).toMatchObject({ id: keep.id, title: 'Halo' })
+    expect(merged.json.sources).toHaveLength(2)
+    expect(
+      (
+        await call('POST', `/v1/library/recordings/${keep.id}/merge`, token, {
+          from: [keep.id],
+        })
+      ).res.status,
+    ).toBe(400)
+
+    const split = await call('POST', `/v1/library/recordings/${keep.id}/split`, token, {
+      sourceIds: [ytm.id],
+    })
+    expect(split.res.status).toBe(201)
+    expect(split.json.original.sources).toHaveLength(1)
+    expect(split.json.split).toMatchObject({ streamSafe: false, sources: [{ id: ytm.id }] })
+    expect(
+      (
+        await call('POST', `/v1/library/recordings/${keep.id}/split`, token, {
+          sourceIds: [split.json.original.sources[0].id],
+        })
+      ).res.status,
+    ).toBe(400)
+  })
+})
+
 describe('rate limits', () => {
   it('allows a burst up to the limit, then 429s with Retry-After', async () => {
     const token = tokenFor(['read'], 3)

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { normalizeTitle, sameRecording, type Core, type LocalFile } from '../src'
-import { testCore, ytmSong } from './helpers'
+import { createCore, normalizeTitle, sameRecording, type Core, type LocalFile } from '../src'
+import { fakeYtm, testCore, ytmSong } from './helpers'
 
 let core: Core
 afterEach(() => core?.close())
@@ -136,6 +136,90 @@ describe('saving to the library', () => {
     expect(core.library.edit(other.id, { streamSafe: true })).toMatchObject({
       streamSafe: true,
       inLibrary: true,
+    })
+  })
+})
+
+describe('merging and splitting by hand', () => {
+  it('merges a missed duplicate, keeping its queue items, flags and ID', () => {
+    core = testCore()
+    const { recordingId: owned } = core.library.saveLocalFile(file())
+    core.library.edit(owned, { streamSafe: true, tags: ['banger'] })
+    // A different-length upload the matcher rightly wouldn't merge on its own.
+    const upload = core.library.ensureYtmSong(cloud('XXXXXXXXXXX', 'One More Time', 330_000))
+    core.library.edit(upload.id, { tags: ['request'] })
+    const queued = core.queue.add({ recordingId: upload.id, origin: 'api' })
+    const ytmSource = core.library.sources(upload.id)[0]!
+    core.queue.pinSource(queued.id, ytmSource.id)
+    const revision = core.queue.revision
+
+    const merged = core.catalog.merge(owned, [upload.id, owned])
+    expect(merged).toMatchObject({
+      id: owned,
+      streamSafe: true,
+      inLibrary: true,
+      album: 'Discovery',
+    })
+    expect(merged.tags.sort()).toEqual(['banger', 'request'])
+    expect(merged.artwork).toBe(upload.artwork)
+    expect(merged.sources.map((s) => s.kind).sort()).toEqual(['local', 'ytm'])
+    expect(core.queue.get(queued.id)).toMatchObject({
+      recordingId: owned,
+      pinnedSourceId: ytmSource.id,
+    })
+    expect(core.queue.revision).toBe(revision + 1)
+
+    // The merged ID still works, for API clients and the player.
+    expect(core.library.get(upload.id)?.id).toBe(owned)
+    expect(core.library.sources(upload.id)).toHaveLength(2)
+    expect(core.queue.add({ recordingId: upload.id, origin: 'user' }).recordingId).toBe(owned)
+    // And a recording merged later carries its aliases along.
+    const third = core.library.ensureYtmSong(cloud('YYYYYYYYYYY', 'One More Time', 340_000))
+    core.catalog.merge(third.id, [owned])
+    expect(core.library.get(upload.id)?.id).toBe(third.id)
+  })
+
+  it('refuses merging a recording into itself or into nothing', () => {
+    core = testCore()
+    const { recordingId } = core.library.saveLocalFile(file())
+    expect(() => core.catalog.merge(recordingId, [recordingId])).toThrow(
+      expect.objectContaining({ type: 'invalid_request' }),
+    )
+    expect(() => core.catalog.merge(recordingId, ['nope'])).toThrow(
+      expect.objectContaining({ type: 'not_found' }),
+    )
+  })
+
+  it('splits a wrong merge back apart, with details from each side', async () => {
+    const live = { ...ytmSong('wU26xVT_vBU', 'One More Time (Live)'), artists: ['Daft Punk'] }
+    core = createCore({ dbPath: ':memory:', ytm: fakeYtm([live]) })
+    const { recordingId } = core.library.saveLocalFile(file())
+    core.library.addSource(recordingId, { kind: 'ytm', locator: live.videoId })
+    core.library.edit(recordingId, { streamSafe: true, tags: ['banger'] })
+    const ytmSource = core.library.sources(recordingId).find((s) => s.kind === 'ytm')!
+    const queued = core.queue.add({ recordingId, origin: 'user' })
+    core.queue.pinSource(queued.id, ytmSource.id)
+
+    const { original, split } = await core.catalog.split(recordingId, [ytmSource.id])
+    expect(original.sources.map((s) => s.kind)).toEqual(['local'])
+    expect(original.streamSafe).toBe(true)
+    expect(split).toMatchObject({
+      title: 'One More Time (Live)',
+      durationMs: live.durationMs,
+      streamSafe: false,
+      tags: ['banger'],
+      sources: [{ id: ytmSource.id, kind: 'ytm' }],
+    })
+    // The queue item stays the song it was, played from what that song still has.
+    expect(core.queue.get(queued.id)).toMatchObject({ recordingId, pinnedSourceId: null })
+    // The file's tags are read again on the next scan.
+    expect(core.library.localFiles()[file().path]).toBeUndefined()
+
+    await expect(core.catalog.split(recordingId, [original.sources[0]!.id])).rejects.toMatchObject({
+      type: 'invalid_request',
+    })
+    await expect(core.catalog.split(recordingId, [ytmSource.id])).rejects.toMatchObject({
+      type: 'not_found',
     })
   })
 })

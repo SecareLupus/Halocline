@@ -14,6 +14,7 @@ import type {
   QueueItem,
   QueuePosition,
   Recording,
+  RecordingDetail,
   RecordingPatch,
   Resolution,
   ScanStatus,
@@ -21,6 +22,7 @@ import type {
   Scope,
   Settings,
   SettingsPatch,
+  SplitResult,
   StampedEvent,
   YtmSong,
   YtmStatus,
@@ -47,6 +49,10 @@ export interface IpcHandlers {
   'ytm.signOut': () => void
   'library.edit': (args: { id: string; changes: RecordingPatch }) => Recording
   'library.editMany': (args: { ids: string[]; changes: RecordingPatch }) => BulkResult
+  /** Merges duplicates of the same song into `id` (PLAN §3). */
+  'library.merge': (args: { id: string; from: string[] }) => RecordingDetail
+  /** Moves sources that aren't this song onto a new recording (PLAN §3). */
+  'library.split': (args: { id: string; sourceIds: string[] }) => SplitResult
   'library.addFolder': () => Settings
   'library.removeFolder': (args: { folder: string }) => Settings
   'library.rescan': (args: { full?: boolean }) => void

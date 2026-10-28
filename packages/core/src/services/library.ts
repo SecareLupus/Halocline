@@ -178,6 +178,9 @@ export function toFtsQuery(text: string): string | undefined {
   return words.map((w) => `"${w}"*`).join(' ')
 }
 
+/** SQL for a recording ID given as either `?`: itself, or what an alias of it was merged into. */
+const CANONICAL_ID = 'coalesce((SELECT recording_id FROM recording_aliases WHERE id = ?), ?)'
+
 export class LibraryService {
   constructor(
     private readonly db: Db,
@@ -281,9 +284,11 @@ export class LibraryService {
     return saved.length === 1 ? saved[0] : undefined
   }
 
+  /** A recording by ID; the ID of one merged into another gives the one it went into. */
   get(id: string): Recording | undefined {
-    const row = this.db.prepare('SELECT * FROM recordings WHERE id = ?').get(id) as
-      RecordingRow | undefined
+    const row = this.db
+      .prepare(`SELECT * FROM recordings WHERE id = ${CANONICAL_ID}`)
+      .get(id, id) as RecordingRow | undefined
     return row && toRecording(row)
   }
 
@@ -475,9 +480,132 @@ export class LibraryService {
 
   sources(recordingId: string): Source[] {
     const rows = this.db
-      .prepare('SELECT * FROM sources WHERE recording_id = ?')
-      .all(recordingId) as SourceRow[]
+      .prepare(`SELECT * FROM sources WHERE recording_id = ${CANONICAL_ID}`)
+      .all(recordingId, recordingId) as SourceRow[]
     return rows.map(toSource)
+  }
+
+  /**
+   * Merges recordings that are the same song into `intoId` (PLAN §3): their sources
+   * and analysis move over, details missing on the kept one are filled in, flags
+   * combine (in the library or stream-safe on any means on), tags join and play
+   * counts add up. The merged IDs stay usable as aliases. `repointQueue` moves
+   * queue items over; it runs before the merged recordings are deleted, which
+   * would delete their queue items.
+   */
+  merge(
+    intoId: string,
+    fromIds: string[],
+    repointQueue: (fromIds: string[], intoId: string) => void,
+  ): { into: Recording; from: string[] } {
+    const into = this.require(intoId)
+    const from: Recording[] = []
+    for (const id of fromIds) {
+      const r = this.require(id)
+      if (r.id !== into.id && !from.some((x) => x.id === r.id)) from.push(r)
+    }
+    if (!from.length) {
+      throw new DomainError('invalid_request', 'Name at least one other recording to merge')
+    }
+    const ids = from.map((r) => r.id)
+    const all = [into, ...from]
+    const first = <K extends keyof Recording>(key: K) =>
+      all.map((r) => r[key]).find((v) => v !== null) ?? null
+    const lastPlayed = all
+      .map((r) => r.lastPlayedAt)
+      .filter((t): t is string => t !== null)
+      .sort()
+      .at(-1)
+    const marks = ids.map(() => '?').join(', ')
+    this.transaction(() => {
+      this.update(into.id, {
+        album: first('album'),
+        durationMs: first('durationMs'),
+        isrc: first('isrc'),
+        artwork: first('artwork'),
+        inLibrary: all.some((r) => r.inLibrary),
+        streamSafe: all.some((r) => r.streamSafe),
+        tags: normalizeTags(all.flatMap((r) => r.tags)),
+      })
+      this.db
+        .prepare(
+          'UPDATE recordings SET play_count = ?, last_played_at = ?, added_at = ? WHERE id = ?',
+        )
+        .run(
+          all.reduce((n, r) => n + r.playCount, 0),
+          lastPlayed ?? null,
+          all.map((r) => r.addedAt).sort()[0],
+          into.id,
+        )
+      this.db
+        .prepare(`UPDATE sources SET recording_id = ? WHERE recording_id IN (${marks})`)
+        .run(into.id, ...ids)
+      // The kept recording's analysis wins; one only a merged recording had moves over.
+      this.db
+        .prepare(`UPDATE OR IGNORE features SET recording_id = ? WHERE recording_id IN (${marks})`)
+        .run(into.id, ...ids)
+      this.db
+        .prepare(`UPDATE recording_aliases SET recording_id = ? WHERE recording_id IN (${marks})`)
+        .run(into.id, ...ids)
+      const alias = this.db.prepare(
+        'INSERT OR REPLACE INTO recording_aliases (id, recording_id) VALUES (?, ?)',
+      )
+      for (const id of ids) alias.run(id, into.id)
+      repointQueue(ids, into.id)
+      this.db.prepare(`DELETE FROM recordings WHERE id IN (${marks})`).run(...ids)
+    })
+    return { into: this.require(into.id), from: ids }
+  }
+
+  /**
+   * Moves sources that aren't the song this recording is onto a new recording
+   * (PLAN §3). It starts with this one's details and tags, but not its
+   * stream-safe flag: it may be a different song, so it has to be tagged again.
+   * At least one source stays. Queue items pinned to a moved source are the
+   * caller's to unpin, in the same transaction.
+   */
+  split(recordingId: string, sourceIds: string[]): { original: Recording; split: Recording } {
+    const original = this.require(recordingId)
+    const sources = this.sources(original.id)
+    const moving = new Set(sourceIds)
+    for (const id of moving) {
+      if (!sources.some((s) => s.id === id)) {
+        throw new DomainError('not_found', `No source ${id} for this recording`)
+      }
+    }
+    if (moving.size >= sources.length) {
+      throw new DomainError('invalid_request', 'At least one source has to stay')
+    }
+    const splitId = this.transaction(() => {
+      const id = this.insert({
+        title: original.title,
+        artists: original.artists,
+        album: original.album,
+        durationMs: original.durationMs,
+        artwork: original.artwork,
+        inLibrary: original.inLibrary,
+        tags: original.tags,
+      })
+      const move = this.db.prepare('UPDATE sources SET recording_id = ? WHERE id = ?')
+      for (const sourceId of moving) move.run(id, sourceId)
+      // Links resolved to the original by its details may mean either recording now.
+      this.db
+        .prepare("DELETE FROM resolutions WHERE json_extract(candidate, '$.match.input') = ?")
+        .run(original.id)
+      return id
+    })
+    return { original: this.require(original.id), split: this.require(splitId) }
+  }
+
+  /**
+   * Makes local files read again on the next scan of their paths, e.g. so a split
+   * recording takes its details from its own file.
+   */
+  rereadLocal(sourceIds: string[]): void {
+    const forget = this.db.prepare(
+      "UPDATE sources SET mtime_ms = NULL, size = NULL WHERE id = ? AND kind = 'local'",
+    )
+    for (const id of sourceIds) forget.run(id)
   }
 
   sourceByLocator(kind: SourceKind, locator: string): Source | undefined {

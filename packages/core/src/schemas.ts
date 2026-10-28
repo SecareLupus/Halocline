@@ -125,6 +125,26 @@ export const BulkResult = z.object({
 })
 export type BulkResult = z.infer<typeof BulkResult>
 
+/** Recordings that are the same song, merged into the one in the path (PLAN §3). */
+export const MergeRecordings = z.object({
+  from: z.array(Id).min(1).max(50),
+})
+export type MergeRecordings = z.infer<typeof MergeRecordings>
+
+/** Sources that aren't the song the recording is, moved onto a new recording (PLAN §3). */
+export const SplitRecording = z.object({
+  sourceIds: z.array(Id).min(1).max(50),
+})
+export type SplitRecording = z.infer<typeof SplitRecording>
+
+export const SplitResult = z.object({
+  /** The recording split from, with the sources it kept. */
+  original: RecordingDetail,
+  /** The new recording, with the sources moved onto it. */
+  split: RecordingDetail,
+})
+export type SplitResult = z.infer<typeof SplitResult>
+
 /** A YouTube Music song as the provider describes it, before it's in the database. */
 export const YtmSong = z.object({
   videoId: z.string().regex(/^[\w-]{11}$/),

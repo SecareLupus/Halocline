@@ -157,6 +157,22 @@ describe('LibraryScanner', () => {
     await vi.waitFor(() => expect(sourcesOf('alpha')[0]?.available).toBe(false))
   })
 
+  it('gives a recording split from a merge its own file tags back', async () => {
+    writeWav(join(music, 'a.wav'), { title: 'Alpha' })
+    writeWav(join(music, 'b.wav'), { title: 'Bravo' }, 2)
+    await setup().scanner.start()
+    const alpha = byTitle('alpha')!
+    const merged = core.catalog.merge(alpha.id, [byTitle('bravo')!.id])
+    expect(merged.sources).toHaveLength(2)
+    expect(byTitle('bravo')).toBeUndefined()
+
+    const bravoFile = merged.sources.find((s) => s.locator.endsWith('b.wav'))!
+    const { split } = await core.catalog.split(alpha.id, [bravoFile.id])
+    expect(split.title).toBe('Alpha')
+    await vi.waitFor(() => expect(core.library.get(split.id)?.title).toBe('Bravo'))
+    expect(core.library.get(alpha.id)?.title).toBe('Alpha')
+  })
+
   it('reads a new folder and the files inside it once', async () => {
     await setup().scanner.start()
     writeWav(join(music, 'sub/b.wav'), { title: 'Bravo' })

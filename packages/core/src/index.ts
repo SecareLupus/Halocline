@@ -131,19 +131,21 @@ export function createCore(options: {
   const ytm = ytmOptions
     ? new YtmProvider(events, { ...ytmOptions, playback: streamer !== null })
     : (options.ytm as YtmCatalog)
-  const catalog = new CatalogService(
-    library,
-    ytm,
-    new LinkResolver(db, library, ytm, options.fetch),
-  )
-  const player = new PlayerService(queue, library, settings, health, ytm, tracks, events)
-  const tokens = new TokenService(db)
   const defaultArtworkDir =
     options.dbPath === ':memory:'
       ? join(tmpdir(), 'halocline-artwork')
       : join(dirname(options.dbPath), 'artwork')
   const scannerOptions = { artworkDir: defaultArtworkDir, ...options.scanner }
   const scanner = new LibraryScanner(library, settings, events, scannerOptions)
+  const catalog = new CatalogService(
+    library,
+    ytm,
+    new LinkResolver(db, library, ytm, options.fetch),
+    queue,
+    (paths) => scanner.scanPaths(paths),
+  )
+  const player = new PlayerService(queue, library, settings, health, ytm, tracks, events)
+  const tokens = new TokenService(db)
   return {
     db,
     events,
