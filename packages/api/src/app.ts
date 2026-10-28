@@ -3,6 +3,7 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import { authenticate, type ApiEnv } from './auth'
 import { problem } from './problem'
 import { rateLimit, RateLimiter } from './rate-limit'
+import { registerDocs } from './routes/docs'
 import { registerEvents } from './routes/events'
 import { registerLibrary } from './routes/library'
 import { registerOverlay } from './routes/overlay'
@@ -47,6 +48,7 @@ export function createApi(core: Core, options: ApiOptions = {}): OpenAPIHono<Api
     },
     security: [{ bearer: [] }],
   })
+  registerDocs(app)
 
   app.use('/v1/*', authenticate(core))
   app.use('/v1/*', rateLimit(new RateLimiter(options.now)))

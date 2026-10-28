@@ -314,6 +314,9 @@ As built (`packages/core/src/resolve/`):
 The API is designed for this app from the ground up. It's an HTTP JSON API with a
 Server-Sent Events stream, and its OpenAPI 3.1 document is generated from the same zod schemas
 the domain layer uses (Hono + `@hono/zod-openapi`, with interactive docs served by the app).
+As built: Swagger UI at `/docs` (linked from Settings → API), from `swagger-ui-dist` bundled into
+the app rather than a CDN, so it works offline under a strict CSP. Reading needs no token;
+**Authorize** takes an API token for **Try it out**.
 
 **Conventions:**
 - Resource-oriented URLs.

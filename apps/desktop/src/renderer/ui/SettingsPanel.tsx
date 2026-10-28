@@ -467,7 +467,11 @@ function ApiTokens(props: { state: AppState }) {
       <h2>API</h2>
       <p>
         <Show when={apiUrl()} fallback="The API server is not running.">
-          Listening on <code>{apiUrl()}</code> · OpenAPI document at{' '}
+          Listening on <code>{apiUrl()}</code> ·{' '}
+          <a href={`${apiUrl()}/docs`} target="_blank" rel="noreferrer">
+            API docs
+          </a>{' '}
+          (try requests with a token from below) · OpenAPI document at{' '}
           <code>{apiUrl()}/openapi.json</code>
         </Show>
       </p>
