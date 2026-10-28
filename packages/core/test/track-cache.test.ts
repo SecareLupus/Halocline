@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseRange, TrackCache, type AudioSource, type AudioStream, type Source } from '../src'
 
 const dirs: string[] = []
@@ -62,8 +62,6 @@ const ytmSource = (videoId: string): Source => ({
   lastChecked: null,
 })
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 5))
-
 describe('parseRange', () => {
   it('parses open, closed and suffix ranges', () => {
     expect(parseRange(null, 100)).toBeNull()
@@ -92,8 +90,7 @@ describe('TrackCache', () => {
     audio.pushAll()
     expect(new Uint8Array(await body)).toEqual(data.slice(150))
 
-    await tick()
-    expect(cache.isCached(source)).toBe(true)
+    await vi.waitFor(() => expect(cache.isCached(source)).toBe(true))
     expect(readdirSync(dir)).toEqual(['abcdefghijk.webm'])
     const again = await cache.read('abcdefghijk', null)
     expect(again.status).toBe(200)
@@ -108,9 +105,9 @@ describe('TrackCache', () => {
     const cache = new TrackCache(audio.source, { dir, maxBytes: 1e9 })
     cache.prefetch(ytmSource('prefetched1'))
     cache.prefetch(ytmSource('prefetched1'))
-    await tick()
+    await vi.waitFor(() => expect(audio.opened).toEqual(['prefetched1']))
     audio.pushAll()
-    await tick()
+    await vi.waitFor(() => expect(cache.isCached(ytmSource('prefetched1'))).toBe(true))
     expect(audio.opened).toEqual(['prefetched1'])
 
     writeFileSync(join(dir, 'leftover123.webm.part'), 'partial')
@@ -126,12 +123,11 @@ describe('TrackCache', () => {
     const response = await cache.read('brokenSong1', null)
     const body = response.arrayBuffer()
     audio.push()
-    await tick()
     audio.fail(new Error('SABR stall'))
     await expect(body).rejects.toThrow()
-    await tick()
+    // Cleanup finishes after readers are told.
+    await vi.waitFor(() => expect(readdirSync(dir)).toEqual([]))
     expect(cache.isCached(ytmSource('brokenSong1'))).toBe(false)
-    expect(readdirSync(dir)).toEqual([])
   })
 
   it('evicts the least recently used tracks past the size limit', async () => {
@@ -147,7 +143,8 @@ describe('TrackCache', () => {
     for (const id of ['first000001', 'second00001', 'third000001']) {
       now += 60 * 60_000
       cache.prefetch(ytmSource(id))
-      await tick()
+      // Each download finishes (and evicts) before the next, so the order is fixed.
+      await vi.waitFor(() => expect(cache.isCached(ytmSource(id))).toBe(true))
     }
     expect(readdirSync(dir).sort()).toEqual(['second00001.webm', 'third000001.webm'])
   })
