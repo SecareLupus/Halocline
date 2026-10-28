@@ -36,6 +36,15 @@ export function normalizeTitle(title: string): string {
   return squash(t)
 }
 
+/**
+ * The song a title names, without any version: "One More Time (Radio Edit)" and
+ * "One More Time - Live" are both "one more time". For telling apart songs, not
+ * recordings.
+ */
+export function songTitle(title: string): string {
+  return normalizeTitle(title.replace(/\s*[([][^)\]]*[)\]]/g, ' ').replace(/\s[-–]\s.*$/, ''))
+}
+
 export function normalizeArtist(artist: string): string {
   return squash(fold(artist).replace(/\s-\stopic$/, ''))
 }

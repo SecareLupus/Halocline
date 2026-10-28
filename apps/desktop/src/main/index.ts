@@ -3,6 +3,7 @@ import { createCore, EngineRouter, type PlayerReport } from '@halocline/core'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
+import { AnalysisHost } from './analysis'
 import { registerIpc } from './ipc'
 import { handleArtworkProtocol, handleTrackProtocol, registerSchemes } from './protocol'
 import { runScanInWorker } from './scan-runner'
@@ -90,10 +91,15 @@ app.whenReady().then(async () => {
     fallback.setOutput(devices.find((d) => d.deviceId === activeDeviceId)?.label ?? null)
   })
 
+  // Audio analysis for autoplay (PLAN §7) runs in its own hidden window, opened when needed.
+  const analysis = new AnalysisHost(core, join(userData, 'models'))
+  void analysis.start()
+
   let ui = createUiWindow()
   core.events.subscribe((event) => {
     for (const window of BrowserWindow.getAllWindows()) {
-      if (window !== player && !window.isDestroyed()) window.webContents.send(IPC.event, event)
+      if (window === player || analysis.owns(window) || window.isDestroyed()) continue
+      window.webContents.send(IPC.event, event)
     }
   })
 
@@ -118,6 +124,7 @@ app.whenReady().then(async () => {
     event.preventDefault()
     pageRuntime.destroy()
     fallback.destroy()
+    analysis.destroy()
     void Promise.allSettled([api?.close(), core.close()]).finally(() => app.exit())
   })
 })

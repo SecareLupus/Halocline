@@ -32,6 +32,7 @@ export function SettingsPanel(props: { state: AppState }) {
       </label>
       <OutputAndTransitions state={props.state} />
       <Autoplay state={props.state} />
+      <AudioAnalysis state={props.state} />
       <YouTubeMusic state={props.state} />
       <LibraryFolders state={props.state} />
       <ObsOverlay state={props.state} />
@@ -181,6 +182,53 @@ function Autoplay(props: { state: AppState }) {
       </label>
       <Show when={props.state.settings()?.streamSafeMode}>
         <p class="empty">Stream-safe mode is on, so autoplay picks only stream-safe songs.</p>
+      </Show>
+    </>
+  )
+}
+
+/** Audio analysis for autoplay (PLAN §7). */
+function AudioAnalysis(props: { state: AppState }) {
+  const status = () => props.state.analysis()
+  const enabled = () => props.state.settings()?.analysis.enabled ?? true
+  const model = () => status()?.model
+  const total = () => (status()?.analyzed ?? 0) + (status()?.pending ?? 0)
+  return (
+    <>
+      <h2>Audio analysis</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={enabled()}
+          onChange={(e) =>
+            void props.state.run(() =>
+              call('settings.patch', { analysis: { enabled: e.currentTarget.checked } }),
+            )
+          }
+        />
+        Analyze songs so autoplay can pick by tempo, key, energy and sound
+      </label>
+      <p class="empty">
+        Local files are analyzed in the background, and YouTube Music songs once they've been played
+        or prefetched. The first time, a 78 MB sound model (LAION CLAP, Apache-2.0) is downloaded
+        from Hugging Face.
+      </p>
+      <Show when={status()}>
+        {(s) => (
+          <p>
+            {s().analyzed} of {total()} analyzed
+            {s().current ? ` · now: ${s().current}` : ''}
+            {s().failed ? ` · ${s().failed} couldn't be read` : ''}
+            {!enabled() && s().pending ? ' · paused' : ''}
+          </p>
+        )}
+      </Show>
+      <Show when={model()?.state === 'downloading'}>
+        <p>Downloading the sound model: {Math.round((model()?.progress ?? 0) * 100)}%</p>
+      </Show>
+      <Show when={model()?.error}>{(error) => <p class="warning">Sound model: {error()}</p>}</Show>
+      <Show when={!model()?.error && status()?.lastError}>
+        {(error) => <p class="warning">{error()}</p>}
       </Show>
     </>
   )

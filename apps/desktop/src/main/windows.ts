@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 const preload = join(import.meta.dirname, '../preload/index.cjs')
 
-function load(window: BrowserWindow, page: 'ui' | 'player'): void {
+function load(window: BrowserWindow, page: 'ui' | 'player' | 'analysis'): void {
   const devServer = process.env['ELECTRON_RENDERER_URL']
   if (devServer) void window.loadURL(`${devServer}/${page}/index.html`)
   else void window.loadFile(join(import.meta.dirname, `../renderer/${page}/index.html`))
@@ -42,5 +42,15 @@ export function createPlayerWindow(): BrowserWindow {
     },
   })
   load(window, 'player')
+  return window
+}
+
+/** Hidden window that analyzes audio for autoplay (PLAN §7), created when there's work. */
+export function createAnalysisWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    show: false,
+    webPreferences: { preload, sandbox: true, contextIsolation: true, backgroundThrottling: false },
+  })
+  load(window, 'analysis')
   return window
 }

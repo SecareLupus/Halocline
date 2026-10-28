@@ -8,6 +8,9 @@ directories:
 files:
   - out/**
   - package.json
+  # The analysis page's libraries are bundled into out/renderer by Vite; their
+  # node_modules copies (150 MB, mostly ONNX Runtime builds) are never loaded.
+  - '!**/node_modules/{onnxruntime-web,onnxruntime-common,protobufjs,@protobufjs,long,flatbuffers,guid-typescript,platform,essentia.js,node-wav}/**'
 # Native modules ship prebuilt N-API binaries, so there's nothing to compile per platform.
 npmRebuild: false
 asarUnpack:

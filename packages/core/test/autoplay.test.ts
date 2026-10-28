@@ -119,6 +119,38 @@ describe('autoplay', () => {
   })
 })
 
+describe('autoplay with audio analysis', () => {
+  const unit = (i: number, lean = 0) => {
+    const v = Array.from({ length: 512 }, () => 0)
+    v[i] = 1 - lean
+    v[i + 1] = lean
+    const n = Math.hypot(...v)
+    return v.map((x) => x / n)
+  }
+  const analyzed = (embedding: number[]) => ({
+    bpm: 124,
+    camelotKey: '8A',
+    loudnessLufs: -8,
+    energy: 0.8,
+    embedding,
+  })
+
+  it('picks what sounds like the current song, never another version of it', async () => {
+    const seed = setup({ down: true, autoplay: { minQueueLength: 1, artistGap: 0 } })
+    core.analysis.save(seed.id, analyzed(unit(0)), 'ytm')
+    const song = (title: string, embedding: number[]) => {
+      const r = core.library.create({ title, artists: ['Nobody'], inLibrary: true })
+      core.analysis.save(r.id, analyzed(embedding), 'local')
+    }
+    song('Different', unit(5))
+    song('Soundalike', unit(0, 0.1))
+    song('Seed Song (Club Remix)', unit(0))
+
+    await core.autoplay.check()
+    expect(queued()).toEqual([['Soundalike', 'autoplay']])
+  })
+})
+
 describe('ranking', () => {
   it('picks the best at no adventurousness and spreads out at full', () => {
     const sorted = Array.from({ length: 20 }, (_, i) => ({ score: 1 - i * 0.02, i }))

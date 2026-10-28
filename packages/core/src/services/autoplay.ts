@@ -1,6 +1,7 @@
 import {
   artistScore,
   combine,
+  featureEvidence,
   pick,
   radioScore,
   tagScore,
@@ -9,9 +10,10 @@ import {
 } from '../autoplay/rank'
 import { DomainError } from '../errors'
 import type { EventBus } from '../events'
-import { normalizeArtist, sameRecording } from '../library/match'
+import { normalizeArtist, sameRecording, songTitle } from '../library/match'
 import type { YtmCatalog } from '../providers/ytm'
 import type { Recording, Settings, YtmSong } from '../schemas'
+import type { AnalysisService } from './analysis'
 import type { LibraryService } from './library'
 import type { QueueService } from './queue'
 import type { SettingsService } from './settings'
@@ -19,6 +21,7 @@ import type { SettingsService } from './settings'
 /** A song autoplay might add: a recording, or a YTM song not in the database yet. */
 interface Candidate {
   key: string
+  title: string
   recording?: Recording
   song?: YtmSong
   artists: string[]
@@ -48,6 +51,7 @@ export class AutoplayService {
     private readonly queue: QueueService,
     private readonly settings: SettingsService,
     private readonly ytm: YtmCatalog,
+    private readonly analysis: AnalysisService,
     events: EventBus,
     private readonly options: {
       /** React to queue, track and settings changes; otherwise only `check()` fills. */
@@ -113,7 +117,11 @@ export class AutoplayService {
         ...history.slice(0, artistGap).flatMap((r) => r.artists),
         ...chosen.slice(-artistGap).flatMap((c) => c.artists),
       ]
-      const pool = this.eligible(candidates, recentArtists, settings).filter(
+      // Another version of a song just heard (a remix, a cover) is still a repeat.
+      const recentSongs = new Set(
+        [...history.slice(0, Math.max(artistGap, 1)), ...chosen].map((s) => songTitle(s.title)),
+      )
+      const pool = this.eligible(candidates, recentArtists, recentSongs, settings).filter(
         (c) => !chosen.includes(c),
       )
       const next = pick(pool, settings.autoplay.adventurousness, this.options.random)
@@ -162,13 +170,20 @@ export class AutoplayService {
         ? this.library.get(recording.recordingId)
         : this.library.findMatch(song, 'ytm')
       const c = known
-        ? add(known.id, { recording: known, artists: known.artists })
-        : add(`ytm:${song.videoId}`, { song, artists: song.artists })
+        ? add(known.id, { recording: known, title: known.title, artists: known.artists })
+        : add(`ytm:${song.videoId}`, { song, title: song.title, artists: song.artists })
       c.evidence.push({ score: radioScore(rank, radio.length), weight: WEIGHTS.radio })
     })
     for (const c of byKey.values()) relate(c)
 
     const streamSafe = settings.streamSafeMode
+    // Library songs that sound like the seed, once both are analyzed.
+    const seedFeatures = this.analysis.features([seed.id]).get(seed.id)
+    const soundsLike = seedFeatures?.embedding
+      ? this.analysis
+          .nearest(seedFeatures.embedding, { limit: LIBRARY_CANDIDATES, streamSafe })
+          .flatMap(({ recordingId }) => this.library.get(recordingId) ?? [])
+      : []
     const related = this.library.libraryWhere({
       artists: [...seed.artists, ...recentArtists],
       tags: seed.tags,
@@ -177,27 +192,40 @@ export class AutoplayService {
     })
     // Some of anything, so autoplay never runs dry on a library with no neighbours.
     const any = this.library.libraryWhere({ streamSafe, limit: LIBRARY_CANDIDATES })
-    for (const recording of [...related, ...any]) {
+    for (const recording of [...soundsLike, ...related, ...any]) {
       if (byKey.has(recording.id)) continue
-      relate(add(recording.id, { recording, artists: recording.artists }))
+      relate(add(recording.id, { recording, title: recording.title, artists: recording.artists }))
     }
 
     const list = [...byKey.values()]
+    if (seedFeatures) {
+      const analyzed = this.analysis.features(list.flatMap((c) => c.recording?.id ?? []))
+      for (const c of list) {
+        const features = c.recording && analyzed.get(c.recording.id)
+        if (features) c.evidence.push(...featureEvidence(seedFeatures, features))
+      }
+    }
     for (const c of list) c.score = combine(c.evidence, c.recording?.inLibrary ?? false)
     return list.sort((a, b) => b.score - a.score)
   }
 
   /**
-   * The candidates allowed now. Stream-safe mode, the queue and the song playing
-   * are hard limits; the artist gap and recent-play window give way, in that
+   * The candidates allowed now. Stream-safe mode, the queue, and the songs playing
+   * or just played (in any version) are hard limits; the artist gap and recent-play window give way, in that
    * order, rather than leave the queue empty.
    */
-  private eligible(candidates: Candidate[], recentArtists: string[], settings: Settings) {
+  private eligible(
+    candidates: Candidate[],
+    recentArtists: string[],
+    recentSongs: Set<string>,
+    settings: Settings,
+  ) {
     const { autoplay, streamSafeMode } = settings
     const queued = new Set(this.queue.list().items.map((i) => i.recordingId))
     const current = this.library.recentlyPlayed(1)[0]?.id
     const cloudOk = autoplay.sources === 'all' && !streamSafeMode && this.ytm.status().playback
     const hard = candidates.filter((c) => {
+      if (recentSongs.has(songTitle(c.title))) return false
       if (c.recording) {
         if (c.recording.id === current || queued.has(c.recording.id)) return false
         return !streamSafeMode || c.recording.streamSafe

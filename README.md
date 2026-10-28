@@ -4,17 +4,16 @@ A desktop music player for live streaming. Local files and YouTube Music share o
 and everything the UI can do is also available over an HTTP API with a live event stream, so
 stream bots can drive it.
 
-> **Status: early skeleton.** Local playback, the queue, the library scanner (tags, cover art,
-> folder watching), search and the API work. YouTube Music, the link resolver, autoplay and the
-> OBS overlay are still to come.
-> See [PLAN.md](PLAN.md) for the design and roadmap.
+> **Status: in development.** Local and YouTube Music playback, the queue, the library (scanner,
+> merging, stream-safe tags), the link resolver, autoplay with audio analysis, the OBS overlay and
+> the API work. See [PLAN.md](PLAN.md) for the design and roadmap.
 
 Targets Linux (Ubuntu) first, then Windows.
 
 ## Development
 
-Requires Node 22.12+ and pnpm 9. Linux also needs a C++ toolchain (`build-essential`) and
-Python 3 to build `better-sqlite3`.
+Requires Node 22.12+ and pnpm 9. Nothing is compiled on install: native modules ship prebuilt
+binaries.
 
 ```bash
 pnpm install
@@ -26,18 +25,19 @@ pnpm dist:linux   # AppImage + .deb in apps/desktop/release/
 
 ### Layout
 
-| Path            | What lives there                                                                |
-| --------------- | ------------------------------------------------------------------------------- |
-| `packages/core` | Domain layer: zod schemas, SQLite store, library, queue, player, tokens, health |
-| `packages/api`  | HTTP API (Hono + OpenAPI 3.1) and SSE event stream over the core services       |
-| `apps/desktop`  | Electron app: main process, `track://` protocol, player renderer, Solid UI      |
-| `scripts`       | Electron-as-Node test runner, licence check, stream canary issue reporter       |
+| Path                | What lives there                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `packages/core`     | Domain layer: zod schemas, SQLite store, library, queue, player, tokens, health         |
+| `packages/api`      | HTTP API (Hono + OpenAPI 3.1) and SSE event stream over the core services               |
+| `packages/analysis` | Audio analysis maths shared with the analysis window: CLAP input features, Camelot keys |
+| `apps/desktop`      | Electron app: main process, `track://` protocol, player renderer, Solid UI              |
+| `scripts`           | Electron-as-Node test runner, licence check, stream canary issue reporter               |
 
 ### Native modules
 
-`better-sqlite3` is built once, for Electron's ABI, by the `postinstall` script. Tests run under
-Electron's bundled Node (`scripts/electron-node.mjs`) so the same binary works everywhere. If
-you see a `NODE_MODULE_VERSION` mismatch, run `pnpm install` again.
+`better-sqlite3` and `@parcel/watcher` load prebuilt N-API binaries, which work in Node and
+Electron alike. Tests run under Electron's bundled Node (`scripts/electron-node.mjs`), the same
+runtime as the app.
 
 ## API
 

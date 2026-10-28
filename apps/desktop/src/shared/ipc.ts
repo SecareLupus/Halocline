@@ -1,7 +1,9 @@
 // The contract between the UI renderer and the main process. Arguments are
 // validated in main against the same zod schemas the HTTP API uses.
 import type {
+  AnalysisStatus,
   ApiToken,
+  AudioFeatures,
   BulkResult,
   Health,
   OutputState,
@@ -45,6 +47,8 @@ export interface IpcHandlers {
   /** Enqueues by resolving `input`: a candidate's input, a link, a ref or a recording ID. */
   'queue.addInput': (args: { input: string; position?: QueuePosition }) => QueueItem
   'ytm.status': () => YtmStatus
+  /** Audio analysis progress (PLAN §7). */
+  'analysis.status': () => AnalysisStatus
   'ytm.signIn': () => void
   'ytm.signOut': () => void
   'library.edit': (args: { id: string; changes: RecordingPatch }) => Recording
@@ -91,6 +95,14 @@ export type IpcChannel = keyof IpcHandlers
 export type IpcResult<T> =
   { ok: true; value: T } | { ok: false; error: { type: ProblemType | 'internal'; message: string } }
 
+/** A track for the analysis window to analyze (PLAN §7). */
+export interface AnalysisJob {
+  jobId: number
+}
+
+export type AnalysisReport =
+  { jobId: number; ok: true; features: AudioFeatures } | { jobId: number; ok: false; error: string }
+
 /** Exposed on `window.halocline` by the preload script. */
 export interface HaloclineBridge {
   invoke<C extends IpcChannel>(
@@ -103,6 +115,15 @@ export interface HaloclineBridge {
     onCommand(listener: (command: PlayerCommand) => void): () => void
     report(report: PlayerReport): void
   }
+  /** Used only by the analysis renderer. */
+  analysis: {
+    onJob(listener: (job: AnalysisJob) => void): () => void
+    report(report: AnalysisReport): void
+    /** The CLAP audio encoder's ONNX bytes, once downloaded. */
+    model(): Promise<Uint8Array>
+    /** The encoded audio of a job's track (a local file, or the cached download). */
+    audio(jobId: number): Promise<Uint8Array>
+  }
 }
 
 export const IPC = {
@@ -110,4 +131,8 @@ export const IPC = {
   event: 'halocline:event',
   playerCommand: 'halocline:player-command',
   playerReport: 'halocline:player-report',
+  analysisJob: 'halocline:analysis-job',
+  analysisReport: 'halocline:analysis-report',
+  analysisModel: 'halocline:analysis-model',
+  analysisAudio: 'halocline:analysis-audio',
 } as const

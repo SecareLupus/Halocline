@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      'unsafe-eval' only here: essentia.js's Emscripten bindings build functions
+      with new Function(). This page loads nothing but its own scripts and
+      track:// audio, and shows nothing.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self' track: data:; worker-src 'self' blob:"
+    />
+    <title>Halocline Analysis</title>
+  </head>
+  <body>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

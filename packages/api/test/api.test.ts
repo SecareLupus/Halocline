@@ -199,6 +199,19 @@ describe('library', () => {
   })
 })
 
+describe('audio analysis', () => {
+  it('reports progress', async () => {
+    const res = await call('GET', '/v1/analysis', { token: tokenFor('read') })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      enabled: true,
+      model: { state: 'unavailable' },
+      analyzed: 0,
+      pending: 0,
+    })
+  })
+})
+
 describe('player output', () => {
   it('lists output devices reported by the player', async () => {
     const state = {

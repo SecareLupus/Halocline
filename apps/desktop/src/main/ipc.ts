@@ -113,6 +113,7 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
       void core.scanner.scan({ full: full ?? false })
     },
     'scan.status': () => core.scanner.status(),
+    'analysis.status': () => core.analysis.status(),
     'queue.list': () => core.queue.list(),
     'queue.add': (a) => {
       const { recordingId, position } = z

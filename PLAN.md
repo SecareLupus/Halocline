@@ -325,6 +325,7 @@ the domain layer uses (Hono + `@hono/zod-openapi`, with interactive docs served 
 | `GET /v1/search?q=&scope=library\|ytm\|all` | unified results; each carries `recordingId` (or a provider ref) and its available sources |
 | `POST /v1/resolve` | link to a match or candidates, without enqueueing |
 | `GET /v1/library/recordings` · `PATCH /v1/library/recordings/{id}` | browse; add or remove from library; set `stream_safe` and tags (with a bulk variant) |
+| `GET /v1/analysis` | audio analysis progress (§7) |
 | `POST /v1/library/recordings/{id}/merge` · `/split` | merge duplicates into this recording; split sources off onto a new one (§3) |
 | `GET /v1/artwork/{recordingId}?size=` | album art: art embedded in local files is extracted at scan time, YTM thumbnails are proxied and resized. Cached either way |
 | `GET /v1/health` | engine status, last errors, scan progress |
@@ -432,11 +433,48 @@ audio analysis, scored as "tracks without features" above.
   rises.
 - **Settings:** on/off, songs to keep queued, sources, adventurousness, artist gap, recent hours.
   They're part of `GET`/`PATCH /v1/settings`, and Settings → Autoplay in the UI.
-- **Not built yet:** audio analysis, the features store and the audio terms of the score (tempo,
-  Camelot key, energy, embeddings). Two findings reopen the analysis design above:
-  - Essentia's Python packages are published for Linux and macOS only, with no Windows builds.
-  - Essentia's pretrained models (Discogs-EffNet, genre and mood heads) are CC BY-NC-SA 4.0,
-    non-commercial, which doesn't fit shipping them in a GPLv3 app.
+
+Phase 5, second part, as built: audio analysis. The Essentia plan above changed after two
+findings. Essentia's Python packages are published for Linux and macOS only, and its pretrained
+models (Discogs-EffNet, genre and mood heads) are CC BY-NC-SA 4.0, non-commercial, which doesn't
+fit a GPLv3 app. Instead, with nothing native or Python:
+- **Where:** a hidden analysis window (`renderer/analysis`), opened when there's work and closed
+  after a minute idle. It gets each job's encoded audio over IPC: a local file, or the cached
+  download. Chromium decodes it, so any format the player plays can be analyzed.
+- **Measurements** with **essentia.js** (AGPLv3, WebAssembly):
+  - tempo: RhythmExtractor2013, `degara` method (it agreed with `multifeature` and is about
+    six times faster);
+  - key: KeyExtractor, written in Camelot notation;
+  - loudness: EBU R128 integrated LUFS;
+  - energy: a heuristic from loudness and onset rate, 0 to 1 (`@halocline/analysis`).
+- **Sound embedding:** the CLAP audio encoder of `laion/larger_clap_music_and_speech`
+  (Apache-2.0), in Xenova's quantized ONNX conversion (78 MB), run by **ONNX Runtime Web**
+  (MIT, WASM, one thread).
+  - It's downloaded from Hugging Face the first time something needs analyzing, pinned to one
+    revision and checked by SHA-256, into `<userData>/models`.
+  - Input features are computed by `@halocline/analysis` to match Hugging Face's
+    ClapFeatureExtractor. They agree within 4×10⁻⁶ dB, and the embeddings with Python's reference
+    to cosine 0.9999.
+  - Three 10 s excerpts (at 30%, 50% and 70% of the track) are embedded and averaged, giving a
+    512-dimensional unit vector. With this model, different kinds of music score below about 0.4
+    cosine, songs of one style 0.6 to 0.75, and versions of one song above 0.9.
+- **Speed:** about 8 s per 3-minute song on one thread, in the background.
+- **Queue** (`services/analysis.ts`):
+  - One track at a time: library local files first, then cloud tracks already in the prefetch
+    cache. Tracks over 20 minutes are skipped.
+  - Results go in `features` with `ANALYSIS_VERSION`. A track that can't be decoded is stored as
+    failed and not retried until the version changes. An unavailable analyzer (no model, a closed
+    window) just pauses the queue.
+  - Settings → Audio analysis turns it off (`analysis.enabled`) and shows progress, also at
+    `GET /v1/analysis` and as `analysis.changed` events.
+- **In autoplay:**
+  - Library songs that sound like the seed (nearest embeddings) join the candidates.
+  - Analyzed candidates get audio evidence: sound (weight 1), tempo with half and double time
+    (0.3), Camelot compatibility (0.3), energy (0.3) and loudness (0.1).
+  - Another version of a song just played (a remix, a cover: the same title without its
+    version notes) is never picked.
+- **Packaging:** Vite bundles essentia.js and ONNX Runtime into the analysis page, so their
+  node_modules copies (150 MB) are left out of the app (`electron-builder.yml`).
 
 ## 8. OBS now-playing overlay (hardcoded layout)
 
@@ -517,7 +555,10 @@ integrations attach to internal hooks, so adding one doesn't touch core code.
 - Dependencies must be GPLv3-compatible:
   - MIT, BSD, ISC and Apache-2.0 are fine.
   - MPL-2.0 (the ghostery adblocker, once the planned ad blocking is built) is fine.
-  - AGPLv3 (Essentia) is combinable with GPLv3.
+  - AGPLv3 (essentia.js) is combinable with GPLv3.
+- Models are data, not dependencies, so the licence checker doesn't see them; check them by hand.
+  The CLAP model is Apache-2.0 and is downloaded at run time, not shipped. Essentia's own models
+  (CC BY-NC-SA) were ruled out.
 - CI runs a license checker that fails on anything incompatible.
 
 ## 10. Phases

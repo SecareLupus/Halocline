@@ -7,7 +7,7 @@ import type { AudioSource } from '../providers/ytm-stream'
 /** The prefetch cache as the player sees it. */
 export interface TrackStore {
   /** Whether the source's audio is fully on disk. */
-  isCached(source: Source): boolean
+  isCached(source: Pick<Source, 'kind' | 'locator'>): boolean
   /** Starts downloading a track ahead of play. Errors surface when it's played. */
   prefetch(source: Source): void
 }
@@ -71,7 +71,7 @@ export class TrackCache implements TrackStore {
     }
   }
 
-  isCached(source: Source): boolean {
+  isCached(source: Pick<Source, 'kind' | 'locator'>): boolean {
     return source.kind === 'ytm' && this.cached.has(source.locator)
   }
 

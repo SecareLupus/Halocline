@@ -25,6 +25,7 @@ export class SettingsService {
       api: { ...current.api, ...patch.api },
       playback: { ...current.playback, ...patch.playback },
       library: { ...current.library, ...patch.library },
+      analysis: { ...current.analysis, ...patch.analysis },
     })
     setKv(this.db, KEY, JSON.stringify(next))
     this.events.publish({ type: 'settings.changed', data: next })

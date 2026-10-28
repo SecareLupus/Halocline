@@ -114,4 +114,10 @@ export const migrations: string[] = [
   );
   CREATE INDEX recording_aliases_recording ON recording_aliases(recording_id);
   `,
+  /* sql */ `
+  -- Audio analysis (PLAN §7): when it ran, and why it failed if it did. A failed
+  -- analysis keeps its row, so the track isn't retried until the analyzer changes.
+  ALTER TABLE features ADD COLUMN analyzed_at TEXT;
+  ALTER TABLE features ADD COLUMN error TEXT;
+  `,
 ]

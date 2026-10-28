@@ -14,6 +14,12 @@ const bridge: HaloclineBridge = {
     onCommand: (listener) => listen(IPC.playerCommand, listener),
     report: (report) => ipcRenderer.send(IPC.playerReport, report),
   },
+  analysis: {
+    onJob: (listener) => listen(IPC.analysisJob, listener),
+    report: (report) => ipcRenderer.send(IPC.analysisReport, report),
+    model: () => ipcRenderer.invoke(IPC.analysisModel),
+    audio: (jobId) => ipcRenderer.invoke(IPC.analysisAudio, jobId),
+  },
 }
 
 contextBridge.exposeInMainWorld('halocline', bridge)

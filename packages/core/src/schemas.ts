@@ -333,6 +333,12 @@ export const Settings = z.object({
       folders: z.array(z.string().min(1)).default([]),
     })
     .prefault({}),
+  analysis: z
+    .object({
+      /** Analyze local files and cached cloud tracks for autoplay (PLAN §7). */
+      enabled: z.boolean().default(true),
+    })
+    .prefault({}),
 })
 export type Settings = z.infer<typeof Settings>
 
@@ -343,10 +349,48 @@ export const SettingsPatch = z
     api: Settings.shape.api.unwrap().partial(),
     playback: Settings.shape.playback.unwrap().partial(),
     library: Settings.shape.library.unwrap().partial(),
+    analysis: Settings.shape.analysis.unwrap().partial(),
   })
   .partial()
   .strict()
 export type SettingsPatch = z.infer<typeof SettingsPatch>
+
+/** One recording's audio analysis (PLAN §7); anything the analyzer couldn't measure is null. */
+export const AudioFeatures = z.object({
+  bpm: z.number().positive().max(400).nullable(),
+  /** Camelot wheel notation, e.g. "8A" (A minor) or "8B" (C major). */
+  camelotKey: z
+    .string()
+    .regex(/^(1[0-2]|[1-9])[AB]$/)
+    .nullable(),
+  loudnessLufs: z.number().min(-100).max(20).nullable(),
+  /** 0 (calm) to 1 (intense). */
+  energy: z.number().min(0).max(1).nullable(),
+  /** CLAP audio embedding, unit length; similar-sounding songs point the same way. */
+  embedding: z.array(z.number()).length(512).nullable(),
+})
+export type AudioFeatures = z.infer<typeof AudioFeatures>
+
+/** Progress of audio analysis (PLAN §7). */
+export const AnalysisStatus = z.object({
+  enabled: z.boolean(),
+  /** The CLAP model is downloaded once (78 MB) before anything is analyzed. */
+  model: z.object({
+    state: z.enum(['unavailable', 'missing', 'downloading', 'ready', 'failed']),
+    /** Download progress, 0 to 1. */
+    progress: z.number().min(0).max(1),
+    error: z.string().nullable(),
+  }),
+  analyzed: z.number().int().nonnegative(),
+  /** Tracks that couldn't be analyzed (e.g. undecodable); not retried. */
+  failed: z.number().int().nonnegative(),
+  /** Local files and cached cloud tracks still to analyze. */
+  pending: z.number().int().nonnegative(),
+  /** Title of the track being analyzed. */
+  current: z.string().nullable(),
+  lastError: z.string().nullable(),
+})
+export type AnalysisStatus = z.infer<typeof AnalysisStatus>
 
 export const HealthStatus = z.enum(['green', 'amber', 'red'])
 export type HealthStatus = z.infer<typeof HealthStatus>

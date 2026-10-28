@@ -20,4 +20,9 @@
   or `stream/track-cache.ts`. The `Stream canary` workflow runs it on demand (its schedule is paused:
   YouTube bot-checks GitHub's hosted runners) and keeps an issue labelled `stream-canary` open
   while it fails.
+- Audio analysis (PLAN §7) runs in the hidden `renderer/analysis` window: essentia.js plus a
+  CLAP model through ONNX Runtime Web. The model is pinned by revision and SHA-256 in
+  `main/analysis.ts`. Bump `ANALYSIS_VERSION` (`services/analysis.ts`) whenever results would
+  change, so old ones are redone. `@halocline/analysis` must stay pure (no Node or DOM APIs): it's
+  bundled into that page and tested under Vitest.
 - Before calling something done: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.

@@ -1,4 +1,12 @@
-import { Health, ScanStatus, Settings, SettingsPatch, YtmStatus, type Core } from '@halocline/core'
+import {
+  AnalysisStatus,
+  Health,
+  ScanStatus,
+  Settings,
+  SettingsPatch,
+  YtmStatus,
+  type Core,
+} from '@halocline/core'
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import { requireScope, type ApiEnv } from '../auth'
 import { authErrors } from '../problem'
@@ -20,6 +28,28 @@ export function registerSystem(app: OpenAPIHono<ApiEnv>, core: Core) {
     }),
     (c) =>
       c.json({ ...core.health.get(), scan: core.scanner.status(), ytm: core.ytm.status() }, 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/analysis',
+      tags: ['system'],
+      summary: 'Audio analysis progress',
+      description:
+        'Local files and cached cloud tracks are analyzed in the background for autoplay ' +
+        '(PLAN §7): tempo, key, loudness, energy and a sound embedding. Follow changes with ' +
+        '`analysis.changed` events. Turn it off with `analysis.enabled` in settings.',
+      middleware: [requireScope('read')],
+      responses: {
+        200: {
+          description: 'Progress',
+          content: { 'application/json': { schema: AnalysisStatus } },
+        },
+        ...authErrors,
+      },
+    }),
+    (c) => c.json(core.analysis.status(), 200),
   )
 
   app.openapi(

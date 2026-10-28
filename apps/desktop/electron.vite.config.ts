@@ -26,11 +26,14 @@ export default defineConfig({
   },
   renderer: {
     plugins: [solid()],
+    // ONNX Runtime loads its WASM and glue module from URLs set at run time.
+    optimizeDeps: { exclude: ['onnxruntime-web'] },
     build: {
       rollupOptions: {
         input: {
           ui: resolve(import.meta.dirname, 'src/renderer/ui/index.html'),
           player: resolve(import.meta.dirname, 'src/renderer/player/index.html'),
+          analysis: resolve(import.meta.dirname, 'src/renderer/analysis/index.html'),
         },
       },
     },

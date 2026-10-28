@@ -1,4 +1,5 @@
 import type {
+  AnalysisStatus,
   Health,
   OutputState,
   PlayerState,
@@ -19,6 +20,7 @@ export function createAppState() {
   const [scan, setScan] = createSignal<ScanStatus | null>(null)
   const [output, setOutput] = createSignal<OutputState | null>(null)
   const [ytm, setYtm] = createSignal<YtmStatus | null>(null)
+  const [analysis, setAnalysis] = createSignal<AnalysisStatus | null>(null)
   const [error, setError] = createSignal<string | null>(null)
   /** Bumped when the library changes, so views can re-run their queries. */
   const [libraryVersion, setLibraryVersion] = createSignal(0)
@@ -30,6 +32,7 @@ export function createAppState() {
   void call('scan.status').then(setScan)
   void call('player.output').then(setOutput)
   void call('ytm.status').then(setYtm)
+  void call('analysis.status').then(setAnalysis)
   void refreshQueue()
 
   const off = window.halocline.onEvent((event) => {
@@ -49,6 +52,8 @@ export function createAppState() {
         return setOutput(event.data)
       case 'ytm.changed':
         return setYtm(event.data)
+      case 'analysis.changed':
+        return setAnalysis(event.data)
       case 'library.changed':
         return setLibraryVersion((v) => v + 1)
     }
@@ -65,7 +70,19 @@ export function createAppState() {
     }
   }
 
-  return { player, queue, health, settings, scan, output, ytm, libraryVersion, error, run }
+  return {
+    player,
+    queue,
+    health,
+    settings,
+    scan,
+    output,
+    ytm,
+    analysis,
+    libraryVersion,
+    error,
+    run,
+  }
 }
 
 export type AppState = ReturnType<typeof createAppState>

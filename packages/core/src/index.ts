@@ -10,6 +10,7 @@ import { YtmStreamer } from './providers/ytm-stream'
 import { TrackCache } from './stream/track-cache'
 import { CatalogService } from './services/catalog'
 import { LinkResolver } from './resolve/resolver'
+import { AnalysisService } from './services/analysis'
 import { AutoplayService } from './services/autoplay'
 import { PlayerService } from './services/player'
 import { LibraryScanner, type ScannerOptions } from './services/scanner'
@@ -21,7 +22,13 @@ export * from './errors'
 export * from './events'
 export * from './schemas'
 export { openDatabase, type Db } from './db'
-export { normalizeArtist, normalizeTitle, sameRecording, type SongIdentity } from './library/match'
+export {
+  normalizeArtist,
+  normalizeTitle,
+  sameRecording,
+  songTitle,
+  type SongIdentity,
+} from './library/match'
 export {
   toFtsQuery,
   LibraryService,
@@ -32,6 +39,12 @@ export { LibraryScanner, type ScannerOptions } from './services/scanner'
 export { CatalogService, parseYtmRef, type SearchScope } from './services/catalog'
 export { LinkResolver } from './resolve/resolver'
 export { AutoplayService } from './services/autoplay'
+export {
+  ANALYSIS_VERSION,
+  AnalysisService,
+  AnalyzerUnavailable,
+  type AudioAnalyzer,
+} from './services/analysis'
 export * from './autoplay/rank'
 export { parseLink, type TrackLink } from './resolve/links'
 export { jaroWinkler, scoreMatch, CONFIDENT, PLAUSIBLE } from './resolve/score'
@@ -81,6 +94,8 @@ export interface Core {
   ytm: YtmCatalog
   catalog: CatalogService
   autoplay: AutoplayService
+  /** Background audio analysis; the app attaches the analyzer. */
+  analysis: AnalysisService
   /** The direct YTM engine and its track cache, when a page runtime was given. */
   streamer: YtmStreamer | null
   tracks: TrackCache | null
@@ -154,7 +169,8 @@ export function createCore(options: {
     (paths) => scanner.scanPaths(paths),
   )
   const player = new PlayerService(queue, library, settings, health, ytm, tracks, events)
-  const autoplay = new AutoplayService(library, queue, settings, ytm, events, {
+  const analysis = new AnalysisService(db, library, settings, tracks, events)
+  const autoplay = new AutoplayService(library, queue, settings, ytm, analysis, events, {
     watch: options.autoplay !== false,
     ...options.autoplay,
   })
@@ -172,6 +188,7 @@ export function createCore(options: {
     ytm,
     catalog,
     autoplay,
+    analysis,
     streamer,
     tracks,
     artworkDir: scannerOptions.artworkDir,

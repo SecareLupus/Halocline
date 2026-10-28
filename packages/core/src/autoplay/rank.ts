@@ -1,4 +1,5 @@
 import { normalizeArtist } from '../library/match'
+import type { AudioFeatures } from '../schemas'
 
 /**
  * One piece of evidence that a candidate suits what's playing: a score from 0 to
@@ -18,6 +19,14 @@ export const WEIGHTS = {
   artist: 0.5,
   /** Shared library tags. */
   tags: 0.4,
+  /** How alike the two sound (CLAP embeddings): as strong as YTM's radio. */
+  sound: 1,
+  /** Tempo, allowing half and double time. */
+  tempo: 0.3,
+  /** Harmonic compatibility on the Camelot wheel. */
+  key: 0.3,
+  energy: 0.3,
+  loudness: 0.1,
 } as const
 
 /** A small nudge towards songs you've saved or own. */
@@ -50,6 +59,56 @@ export function tagScore(a: string[], b: string[]): number {
   const shared = [...x].filter((t) => y.has(t)).length
   return shared / (x.size + y.size - shared)
 }
+
+/** Cosine similarity of two unit-length embeddings, as a score. */
+export function soundScore(a: number[], b: number[]): number {
+  let dot = 0
+  for (let i = 0; i < a.length; i++) dot += a[i]! * (b[i] ?? 0)
+  // With this CLAP model, different kinds of music score below about 0.4, songs of
+  // one style 0.6 to 0.75, and versions of one song above 0.9.
+  return clamp((dot - 0.4) / 0.5)
+}
+
+/** 1 for the same tempo, falling to 0 at 8% apart; half and double time count as the same. */
+export function tempoScore(a: number, b: number): number {
+  const apart = Math.min(...[b / a, (2 * b) / a, b / (2 * a)].map((r) => Math.abs(Math.log(r))))
+  return clamp(1 - apart / Math.log(1.08))
+}
+
+/**
+ * Camelot compatibility: the same key; its relative major or minor and the keys
+ * a fifth away mix smoothly (0.8); two steps away less so (0.4); otherwise 0.
+ */
+export function keyScore(a: string, b: string): number {
+  const [na, la] = [Number.parseInt(a), a.at(-1)]
+  const [nb, lb] = [Number.parseInt(b), b.at(-1)]
+  const steps = Math.min((na - nb + 12) % 12, (nb - na + 12) % 12)
+  if (steps === 0) return la === lb ? 1 : 0.8
+  if (steps === 1) return la === lb ? 0.8 : 0.4
+  if (steps === 2 && la === lb) return 0.4
+  return 0
+}
+
+/** Evidence from audio analysis, for whichever measurements both songs have. */
+export function featureEvidence(seed: AudioFeatures, other: AudioFeatures): Evidence[] {
+  const out: Evidence[] = []
+  if (seed.embedding && other.embedding)
+    out.push({ score: soundScore(seed.embedding, other.embedding), weight: WEIGHTS.sound })
+  if (seed.bpm && other.bpm)
+    out.push({ score: tempoScore(seed.bpm, other.bpm), weight: WEIGHTS.tempo })
+  if (seed.camelotKey && other.camelotKey)
+    out.push({ score: keyScore(seed.camelotKey, other.camelotKey), weight: WEIGHTS.key })
+  if (seed.energy !== null && other.energy !== null)
+    out.push({ score: 1 - Math.abs(seed.energy - other.energy), weight: WEIGHTS.energy })
+  if (seed.loudnessLufs !== null && other.loudnessLufs !== null)
+    out.push({
+      score: clamp(1 - Math.abs(seed.loudnessLufs - other.loudnessLufs) / 10),
+      weight: WEIGHTS.loudness,
+    })
+  return out
+}
+
+const clamp = (x: number) => Math.min(1, Math.max(0, x))
 
 /**
  * Picks one of the best candidates (sorted best first). Adventurousness widens
