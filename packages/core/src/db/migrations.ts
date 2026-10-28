@@ -97,4 +97,13 @@ export const migrations: string[] = [
   ALTER TABLE sources ADD COLUMN mtime_ms INTEGER;
   ALTER TABLE sources ADD COLUMN size INTEGER;
   `,
+  /* sql */ `
+  -- Link resolutions (PLAN §5), keyed by provider and track ID, so a link resolves
+  -- once however it's formatted. Only confident matches are kept.
+  CREATE TABLE resolutions (
+    link_key    TEXT PRIMARY KEY,
+    candidate   TEXT NOT NULL,
+    resolved_at TEXT NOT NULL
+  );
+  `,
 ]

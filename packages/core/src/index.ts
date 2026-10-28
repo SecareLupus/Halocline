@@ -9,6 +9,7 @@ import type { PageRuntime } from './providers/po-token'
 import { YtmStreamer } from './providers/ytm-stream'
 import { TrackCache } from './stream/track-cache'
 import { CatalogService } from './services/catalog'
+import { LinkResolver } from './resolve/resolver'
 import { PlayerService } from './services/player'
 import { LibraryScanner, type ScannerOptions } from './services/scanner'
 import { QueueService } from './services/queue'
@@ -28,6 +29,9 @@ export {
 } from './services/library'
 export { LibraryScanner, type ScannerOptions } from './services/scanner'
 export { CatalogService, parseYtmRef, type SearchScope } from './services/catalog'
+export { LinkResolver } from './resolve/resolver'
+export { parseLink, type TrackLink } from './resolve/links'
+export { jaroWinkler, scoreMatch, CONFIDENT, PLAUSIBLE } from './resolve/score'
 export {
   YtmProvider,
   upscaleArtwork,
@@ -90,6 +94,8 @@ export function createCore(options: {
   scanner?: Partial<ScannerOptions>
   /** A YTM catalog to use instead of the real provider (tests), or options for it. */
   ytm?: YtmCatalog | YtmProviderOptions
+  /** For the link resolver's metadata lookups; tests pass a fake. */
+  fetch?: typeof globalThis.fetch
   /** Enables direct YTM playback (PLAN §4). The app shell supplies the page runtime. */
   stream?: {
     runtime: PageRuntime
@@ -125,7 +131,11 @@ export function createCore(options: {
   const ytm = ytmOptions
     ? new YtmProvider(events, { ...ytmOptions, playback: streamer !== null })
     : (options.ytm as YtmCatalog)
-  const catalog = new CatalogService(library, ytm)
+  const catalog = new CatalogService(
+    library,
+    ytm,
+    new LinkResolver(db, library, ytm, options.fetch),
+  )
   const player = new PlayerService(queue, library, settings, health, ytm, tracks, events)
   const tokens = new TokenService(db)
   const defaultArtworkDir =

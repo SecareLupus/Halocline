@@ -1,27 +1,19 @@
 import { DomainError } from '../errors'
 import type { YtmCatalog } from '../providers/ytm'
-import type { Recording, SearchResult, YtmSong } from '../schemas'
+import { candidateSong, type LinkResolver } from '../resolve/resolver'
+import { looksLikeUrl } from '../resolve/links'
+import type { Recording, Resolution, ResolveCandidate, SearchResult, YtmSong } from '../schemas'
 import type { LibraryService } from './library'
 
 export type SearchScope = 'library' | 'ytm' | 'all'
 
-/** Finds the videoId in a `ytm:<id>` ref or a music.youtube.com link. */
+/**
+ * The videoId in a `ytm:<id>` ref: an explicit pick (a search result or a
+ * resolver candidate), played as is. Links go through the resolver instead.
+ */
 export function parseYtmRef(input: string): string | undefined {
-  const ref = input.match(/^ytm:([\w-]{11})$/)
-  if (ref) return ref[1]
-  try {
-    const url = new URL(input)
-    if (url.hostname === 'music.youtube.com' && url.pathname === '/watch') {
-      const v = url.searchParams.get('v')
-      if (v && /^[\w-]{11}$/.test(v)) return v
-    }
-  } catch {
-    // not a URL
-  }
-  return undefined
+  return /^ytm:([\w-]{11})$/.exec(input.trim())?.[1]
 }
-
-const looksLikeUrl = (s: string) => /^https?:\/\//i.test(s)
 
 /**
  * One search box and one way to turn "something to play" into a recording,
@@ -31,6 +23,7 @@ export class CatalogService {
   constructor(
     private readonly library: LibraryService,
     private readonly ytm: YtmCatalog,
+    private readonly links: LinkResolver,
   ) {}
 
   /** Library hits first (PLAN §1), then YTM songs that aren't already among them. */
@@ -69,23 +62,61 @@ export class CatalogService {
    * Turns an input into a recording: a recordingId, a YTM ref or link, or a
    * library query with exactly one match. Other links wait for the resolver (PLAN §5).
    */
+  /**
+   * Turns "something to play" into a recording: a recording ID, a `ytm:` ref, a
+   * track link (PLAN §5) or a library search. Anything short of one confident
+   * answer is `match_ambiguous` with candidates, or `not_found`.
+   */
   async resolve(input: string): Promise<Recording> {
     const byId = this.library.get(input)
     if (byId) return byId
     const videoId = parseYtmRef(input)
     if (videoId) return this.ytmRecording(videoId)
     if (looksLikeUrl(input)) {
-      throw new DomainError(
-        'not_implemented',
-        'Only YouTube Music links are resolved so far (PLAN §5)',
-      )
+      const resolution = await this.links.resolve(input)
+      if (resolution.match) return this.materialize(resolution.match)
+      throw this.unresolved(resolution.candidates, 'Nothing matched that link')
     }
     const hits = this.library.search(input, 5)
     if (hits.length === 1) return hits[0]!
-    if (hits.length === 0)
-      throw new DomainError('not_found', `Nothing in the library matches "${input}"`)
-    throw new DomainError('match_ambiguous', 'More than one recording matches', {
-      candidates: hits,
+    throw this.unresolved(hits.map(libraryCandidate), `Nothing in the library matches "${input}"`)
+  }
+
+  /**
+   * What `input` would resolve to, without adding anything to the queue or the
+   * database (`POST /v1/resolve`).
+   */
+  async preview(input: string): Promise<Resolution> {
+    const byId = this.library.get(input)
+    if (byId) {
+      const only = libraryCandidate(byId)
+      return { link: null, match: only, candidates: [only], cached: false }
+    }
+    if (parseYtmRef(input) || !looksLikeUrl(input)) {
+      const hits = parseYtmRef(input) ? [] : this.library.search(input, 5).map(libraryCandidate)
+      return {
+        link: null,
+        match: hits.length === 1 ? hits[0]! : null,
+        candidates: hits,
+        cached: false,
+      }
+    }
+    return this.links.resolve(input)
+  }
+
+  /** A chosen candidate as a recording, adding a YTM song to the database if needed. */
+  materialize(candidate: ResolveCandidate): Recording {
+    if (candidate.source === 'library') return this.library.require(candidate.input)
+    const song = candidateSong(candidate)
+    if (!song)
+      throw new DomainError('invalid_request', `Not a YouTube Music pick: ${candidate.input}`)
+    return this.library.ensureYtmSong(song)
+  }
+
+  private unresolved(candidates: ResolveCandidate[], notFound: string): DomainError {
+    if (!candidates.length) return new DomainError('not_found', notFound)
+    return new DomainError('match_ambiguous', 'More than one song could be meant; pick one', {
+      candidates,
     })
   }
 
@@ -122,5 +153,19 @@ export class CatalogService {
     }
     if (!song) throw new DomainError('not_found', `YouTube Music has no song ${videoId}`)
     return this.library.ensureYtmSong(song)
+  }
+}
+
+/** A library recording as a candidate. Text searches give no score, so it's 0. */
+function libraryCandidate(r: Recording): ResolveCandidate {
+  return {
+    input: r.id,
+    source: 'library',
+    title: r.title,
+    artists: r.artists,
+    album: r.album,
+    durationMs: r.durationMs,
+    artwork: r.artwork,
+    score: 0,
   }
 }

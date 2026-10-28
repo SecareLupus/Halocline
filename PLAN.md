@@ -247,6 +247,39 @@ Matching:
 4. **Odesli/song.link** is used only when steps 1–3 find nothing. It can be disabled in settings.
 5. Resolutions are cached by URL.
 
+As built (`packages/core/src/resolve/`):
+- **Reading links:**
+  - Spotify and Tidal give their link-preview tags (title, artists, album, duration) to a client
+    that identifies itself, here as "Halocline … (link preview)". A browser user agent gets only
+    a script shell.
+  - Apple uses the iTunes Lookup API and Deezer its public track API. YouTube links go through
+    youtubei.js, splitting upload titles like "Artist - Title (Official Video)".
+  - Deezer's public search fills in a missing ISRC and duration. With no duration (Tidal) it takes
+    an exact title and artist, since nothing else can be confident.
+- **Scoring:**
+  - Matching ISRCs score 1.
+  - Durations more than 3 s apart score 0. An unknown duration caps the score at 0.85, below
+    confident.
+  - Otherwise 65% title and 35% best artist pair (Jaro-Winkler), after normalising (featured
+    artists, remaster notes and video decorations dropped).
+  - Extra words in one title ("Radio Edit", "Live") cap the title part, so another version is
+    never confident.
+  - Confident is ≥ 0.9; candidates are ≥ 0.6.
+- **Precedence:** a confident library match, then a linked YTM song as it is, then YTM's song for
+  a linked video, then the linked video itself (it's exactly what was asked for).
+- **API:**
+  - `POST /v1/resolve` previews without enqueueing.
+  - `POST /v1/queue/items` and `POST /v1/library/recordings` resolve links the same way.
+  - Anything short of one confident answer is `422 match_ambiguous` with `candidates`. Each has an
+    `input` to send back.
+- **UI:** pasting a link into the search box shows what it was read as, the match, and the
+  alternatives with their scores.
+- **Cache:** confident matches only, keyed by provider and track ID, so tracking parameters don't
+  matter. A library match whose recording is gone is dropped.
+- **Odesli is not built.** Its public API now answers `401 PUBLIC_API_ACCESS_DEPRECATED` and needs
+  an API key. Deezer plus YTM search covered every link tried so far.
+- **Not built:** the optional Spotify API credentials for ISRCs. Deezer supplies them.
+
 ## 6. API
 
 The API is designed for this app from the ground up. It's an HTTP JSON API with a

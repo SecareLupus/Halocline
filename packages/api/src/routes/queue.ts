@@ -7,7 +7,7 @@ import { authErrors, errorResponse } from '../problem'
 const ItemParams = z.object({ id: Id })
 
 const AddItem = z.object({
-  /** A recordingId, a `ytm:<videoId>` ref, a music.youtube.com link, or a library query. */
+  /** A recordingId, a `ytm:<videoId>` ref, a track link (PLAN §5), or a library query. */
   input: z.string().min(1).max(2000),
   position: QueuePosition.default('end'),
   requestedBy: z.string().max(100).optional(),
@@ -68,7 +68,10 @@ export function registerQueue(app: OpenAPIHono<ApiEnv>, core: Core) {
         404: errorResponse('Nothing matched'),
         409: errorResponse('stream_safe_violation'),
         412: errorResponse('revision_mismatch'),
-        422: errorResponse('match_ambiguous, with candidates'),
+        422: errorResponse(
+          '`match_ambiguous`: no confident answer. `candidates` lists the options, best first; ' +
+            'enqueue one by passing its `input`.',
+        ),
       },
     }),
     async (c) => {

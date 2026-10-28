@@ -8,9 +8,9 @@ afterEach(() => core?.close())
 const SONGS = [ytmSong('aaaaaaaaaaa', 'Halo Song'), ytmSong('bbbbbbbbbbb', 'Halo Other')]
 
 describe('parseYtmRef', () => {
-  it('accepts refs and music.youtube.com links only', () => {
+  it('accepts ytm: refs only; links go through the resolver', () => {
     expect(parseYtmRef('ytm:aaaaaaaaaaa')).toBe('aaaaaaaaaaa')
-    expect(parseYtmRef('https://music.youtube.com/watch?v=fa5IWHDbftI&si=x')).toBe('fa5IWHDbftI')
+    expect(parseYtmRef('https://music.youtube.com/watch?v=fa5IWHDbftI&si=x')).toBeUndefined()
     expect(parseYtmRef('https://www.youtube.com/watch?v=fa5IWHDbftI')).toBeUndefined()
     expect(parseYtmRef('ytm:short')).toBeUndefined()
   })

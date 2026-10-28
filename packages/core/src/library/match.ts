@@ -49,8 +49,14 @@ export function sameRecording(a: SongIdentity, b: SongIdentity): boolean {
   return b.artists.some((artist) => artists.has(normalizeArtist(artist)))
 }
 
+/** Accents and apostrophes dropped ("Don’t" = "Dont"), case folded, "&" as "and". */
 const fold = (s: string) =>
-  s.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase().replace(/&/g, ' and ')
+  s
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/['’‘`]/g, '')
+    .toLocaleLowerCase()
+    .replace(/&/g, ' and ')
 
 /** Punctuation to spaces, whitespace collapsed. */
 const squash = (s: string) =>

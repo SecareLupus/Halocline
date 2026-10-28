@@ -353,3 +353,8 @@ h2 {
   color: var(--green);
   border-color: var(--green);
 }
+
+.list li.best {
+  background: color-mix(in srgb, var(--accent, #4fb3d9) 10%, transparent);
+  border-radius: 6px;
+}

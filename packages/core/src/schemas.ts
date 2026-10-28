@@ -158,6 +158,47 @@ export const SearchResult = z.discriminatedUnion('kind', [
 ])
 export type SearchResult = z.infer<typeof SearchResult>
 
+/** Services whose track links the resolver reads (PLAN §5). */
+export const LinkProvider = z.enum(['ytm', 'youtube', 'spotify', 'tidal', 'apple', 'deezer'])
+export type LinkProvider = z.infer<typeof LinkProvider>
+
+/** What a link was read as, before matching. */
+export const LinkMetadata = z.object({
+  provider: LinkProvider,
+  title: z.string(),
+  artists: z.array(z.string()),
+  album: z.string().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  isrc: z.string().nullable(),
+})
+export type LinkMetadata = z.infer<typeof LinkMetadata>
+
+/** A song a link (or query) may mean, with how sure the resolver is. */
+export const ResolveCandidate = z.object({
+  /** Pass back as `input` (e.g. to `POST /v1/queue/items`) to pick this one. */
+  input: z.string(),
+  source: z.enum(['library', 'ytm']),
+  title: z.string(),
+  artists: z.array(z.string()),
+  album: z.string().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  artwork: z.string().nullable(),
+  score: z.number().min(0).max(1),
+})
+export type ResolveCandidate = z.infer<typeof ResolveCandidate>
+
+export const Resolution = z.object({
+  /** What the link was read as; null when the input wasn't a link. */
+  link: LinkMetadata.nullable(),
+  /** Set when one candidate is confident enough to play without asking. */
+  match: ResolveCandidate.nullable(),
+  /** Best first, the match included. */
+  candidates: z.array(ResolveCandidate),
+  /** Whether the match came from the resolution cache. */
+  cached: z.boolean(),
+})
+export type Resolution = z.infer<typeof Resolution>
+
 export const QueueOrigin = z.enum(['user', 'api', 'autoplay'])
 export type QueueOrigin = z.infer<typeof QueueOrigin>
 

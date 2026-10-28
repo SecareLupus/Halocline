@@ -40,6 +40,7 @@ describe('matching', () => {
     expect(normalizeTitle('Heroes - 2017 Remaster')).toBe('heroes')
     expect(normalizeTitle('Heroes (Remastered 2017)')).toBe('heroes')
     expect(normalizeTitle('Café del Mar!')).toBe('cafe del mar')
+    expect(normalizeTitle('Don’t Stop Me Now')).toBe(normalizeTitle('Dont Stop Me Now'))
     // These name different recordings, so they stay.
     expect(normalizeTitle('One More Time (Radio Edit)')).toBe('one more time radio edit')
     expect(normalizeTitle('Heroes - Live')).toBe('heroes live')

@@ -38,6 +38,19 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
   const handlers: { [C in IpcChannel]: Handler<C> } = {
     'library.search': (a) => core.library.search(z.object({ q: z.string() }).parse(a).q),
     search: (a) => core.catalog.search(z.object({ q: z.string().min(1).max(200) }).parse(a).q),
+    resolve: (a) =>
+      core.catalog.preview(z.object({ input: z.string().min(1).max(2000) }).parse(a).input),
+    'queue.addInput': async (a) => {
+      const { input, position } = z
+        .object({ input: z.string().min(1).max(2000), position: QueuePosition.optional() })
+        .parse(a)
+      const recording = await core.catalog.resolve(input)
+      return core.queue.add({
+        recordingId: recording.id,
+        origin: 'user',
+        ...(position && { position }),
+      })
+    },
     'queue.addYtm': (a) => {
       const { song, position } = z
         .object({ song: YtmSong, position: QueuePosition.optional() })

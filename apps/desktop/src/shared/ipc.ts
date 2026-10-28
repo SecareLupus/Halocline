@@ -15,6 +15,7 @@ import type {
   QueuePosition,
   Recording,
   RecordingPatch,
+  Resolution,
   ScanStatus,
   SearchResult,
   Scope,
@@ -37,6 +38,10 @@ export interface IpcHandlers {
   /** Library first, then YouTube Music songs. */
   search: (args: { q: string }) => SearchResult[]
   'queue.addYtm': (args: { song: YtmSong; position?: QueuePosition }) => QueueItem
+  /** What a pasted link (or query) means, without enqueueing (PLAN §5). */
+  resolve: (args: { input: string }) => Resolution
+  /** Enqueues by resolving `input`: a candidate's input, a link, a ref or a recording ID. */
+  'queue.addInput': (args: { input: string; position?: QueuePosition }) => QueueItem
   'ytm.status': () => YtmStatus
   'ytm.signIn': () => void
   'ytm.signOut': () => void

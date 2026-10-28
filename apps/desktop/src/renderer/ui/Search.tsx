@@ -1,4 +1,4 @@
-import type { Recording, SearchResult, YtmSong } from '@halocline/core'
+import type { LinkProvider, Recording, Resolution, SearchResult, YtmSong } from '@halocline/core'
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js'
 import { call } from './bridge'
 import type { AppState } from './store'
@@ -9,6 +9,7 @@ const SEARCH_DELAY_MS = 300
 export function Search(props: { state: AppState }) {
   const [query, setQuery] = createSignal('')
   const [results, setResults] = createSignal<SearchResult[]>([])
+  const [resolution, setResolution] = createSignal<Resolution | null>(null)
   const [searching, setSearching] = createSignal(false)
   const hasFolders = () => (props.state.settings()?.library.folders.length ?? 0) > 0
   const library = () => results().flatMap((r) => (r.kind === 'library' ? [r.recording] : []))
@@ -29,6 +30,7 @@ export function Search(props: { state: AppState }) {
     const id = ++latest
     if (!q.trim()) {
       setResults([])
+      setResolution(null)
       setSearching(false)
       return
     }
@@ -36,8 +38,20 @@ export function Search(props: { state: AppState }) {
     timer = setTimeout(() => {
       void props.state.run(async () => {
         try {
-          const found = await call('search', { q })
-          if (id === latest) setResults(found)
+          // A pasted track link is resolved (PLAN §5); anything else is a search.
+          if (isLink(q)) {
+            const found = await call('resolve', { input: q.trim() })
+            if (id === latest) {
+              setResolution(found)
+              setResults([])
+            }
+          } else {
+            const found = await call('search', { q })
+            if (id === latest) {
+              setResults(found)
+              setResolution(null)
+            }
+          }
         } finally {
           if (id === latest) setSearching(false)
         }
@@ -57,6 +71,8 @@ export function Search(props: { state: AppState }) {
   const addFolder = () => props.state.run(() => call('library.addFolder'))
   const enqueue = (recording: Recording, position: 'next' | 'end') =>
     props.state.run(() => call('queue.add', { recordingId: recording.id, position }))
+  const enqueueInput = (input: string, position: 'next' | 'end') =>
+    props.state.run(() => call('queue.addInput', { input, position }))
   const enqueueYtm = (song: YtmSong, position: 'next' | 'end') =>
     props.state.run(() => call('queue.addYtm', { song, position }))
   const saveYtm = (song: YtmSong) => props.state.run(() => call('library.saveYtm', { song }))
@@ -73,7 +89,7 @@ export function Search(props: { state: AppState }) {
       <div class="search-row">
         <input
           type="search"
-          placeholder="Search your library and YouTube Music"
+          placeholder="Search, or paste a song link (YouTube, Spotify, Apple Music, Tidal, Deezer)"
           value={query()}
           onInput={(e) => {
             setQuery(e.currentTarget.value)
@@ -84,8 +100,16 @@ export function Search(props: { state: AppState }) {
           Add folder…
         </button>
       </div>
+      <Show when={resolution()}>
+        {(r) => (
+          <LinkResult
+            resolution={r()}
+            enqueue={(input, position) => void enqueueInput(input, position)}
+          />
+        )}
+      </Show>
       <Show
-        when={results().length}
+        when={results().length || resolution()}
         fallback={
           <p class="empty">
             {searching()
@@ -172,6 +196,68 @@ export function Search(props: { state: AppState }) {
         </Show>
       </Show>
     </section>
+  )
+}
+
+const isLink = (q: string) => /^(https?:\/\/|spotify:)/i.test(q.trim())
+
+const PROVIDERS: Record<LinkProvider, string> = {
+  ytm: 'YouTube Music',
+  youtube: 'YouTube',
+  spotify: 'Spotify',
+  tidal: 'Tidal',
+  apple: 'Apple Music',
+  deezer: 'Deezer',
+}
+
+/** A resolved link: what it was read as, then the match (if confident) and alternatives. */
+function LinkResult(props: {
+  resolution: Resolution
+  enqueue: (input: string, position: 'next' | 'end') => void
+}) {
+  const link = () => props.resolution.link
+  return (
+    <>
+      <div class="results-bar">
+        <span class="empty">
+          <Show when={link()} fallback="Link">
+            {(l) => (
+              <>
+                {PROVIDERS[l().provider]}: {l().artists.join(', ')} · {l().title}
+              </>
+            )}
+          </Show>
+        </span>
+        <span class="empty">
+          {props.resolution.match
+            ? 'Confident match'
+            : props.resolution.candidates.length
+              ? 'Not sure; pick one'
+              : 'No match found'}
+        </span>
+      </div>
+      <ul class="list">
+        <For each={props.resolution.candidates}>
+          {(c) => (
+            <li classList={{ best: c.input === props.resolution.match?.input }}>
+              <TrackLabel track={c} />
+              <span class="actions">
+                <span class="badge" title="How sure the match is">
+                  {c.source === 'library' ? 'library' : 'YouTube Music'}
+                  {c.score ? ` · ${Math.round(c.score * 100)}%` : ''}
+                </span>
+                <button type="button" onClick={() => props.enqueue(c.input, 'next')}>
+                  Next
+                </button>
+                <button type="button" onClick={() => props.enqueue(c.input, 'end')}>
+                  Add
+                </button>
+              </span>
+            </li>
+          )}
+        </For>
+      </ul>
+    </>
   )
 }
 
