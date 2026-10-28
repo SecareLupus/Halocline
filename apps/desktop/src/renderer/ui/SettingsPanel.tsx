@@ -40,6 +40,7 @@ export function SettingsPanel(props: { state: AppState }) {
       </label>
       <OutputAndTransitions state={props.state} />
       <YouTubeMusic state={props.state} />
+      <LinkMatching state={props.state} />
       <LibraryFolders state={props.state} />
       <ObsOverlay state={props.state} />
       <ApiTokens state={props.state} />
@@ -130,6 +131,59 @@ function YouTubeMusic(props: { state: AppState }) {
           YouTube Music songs can be searched and queued, but not played yet: no playback engine is
           available, so they're skipped.
         </p>
+      </Show>
+      <Show when={status()?.lastError}>{(error) => <p class="warning">{error()}</p>}</Show>
+    </>
+  )
+}
+
+/** The resolver's song.link fallback (PLAN §5 step 4). The key is write-only. */
+function LinkMatching(props: { state: AppState }) {
+  const [status, { mutate }] = createResource(() => call('odesli.status'))
+  const [key, setKey] = createSignal('')
+  const save = (value: string | null) =>
+    props.state.run(async () => {
+      mutate(await call('odesli.setKey', { key: value }))
+      setKey('')
+    })
+
+  return (
+    <>
+      <h2>Link matching</h2>
+      <p>
+        Pasted Spotify, Apple Music, Tidal, Deezer and YouTube links are matched using each
+        service's public details. With an Odesli (song.link) API key, links nothing else matches
+        are also looked up there.
+      </p>
+      <Show
+        when={status()?.configured}
+        fallback={
+          <form
+            class="button-row"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void save(key().trim())
+            }}
+          >
+            <input
+              type="password"
+              placeholder="Odesli API key"
+              autocomplete="off"
+              value={key()}
+              onInput={(e) => setKey(e.currentTarget.value)}
+            />
+            <button type="submit" disabled={!key().trim()}>
+              Save key
+            </button>
+          </form>
+        }
+      >
+        <div class="button-row">
+          <span>song.link fallback is on.</span>
+          <button type="button" onClick={() => void save(null)}>
+            Remove key
+          </button>
+        </div>
       </Show>
       <Show when={status()?.lastError}>{(error) => <p class="warning">{error()}</p>}</Show>
     </>

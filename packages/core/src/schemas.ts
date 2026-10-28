@@ -199,6 +199,21 @@ export const Resolution = z.object({
 })
 export type Resolution = z.infer<typeof Resolution>
 
+/** The Odesli (song.link) fallback of PLAN §5. Its API key is write-only. */
+export const OdesliStatus = z.object({
+  /** An API key is set, so the fallback is on. */
+  configured: z.boolean(),
+  /** Why the last song.link request failed (e.g. a rejected key), cleared by a success. */
+  lastError: z.string().nullable(),
+})
+export type OdesliStatus = z.infer<typeof OdesliStatus>
+
+export const OdesliKey = z.object({
+  /** The song.link API key; null removes it and turns the fallback off. */
+  key: z.string().trim().min(1).max(500).nullable(),
+})
+export type OdesliKey = z.infer<typeof OdesliKey>
+
 export const QueueOrigin = z.enum(['user', 'api', 'autoplay'])
 export type QueueOrigin = z.infer<typeof QueueOrigin>
 

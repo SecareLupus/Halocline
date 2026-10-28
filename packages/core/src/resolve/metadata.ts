@@ -179,7 +179,7 @@ function fromDeezer(t: DeezerTrack): Omit<LinkMetadata, 'provider'> {
  * "A, B feat. C" → ["A", "B", "C"]. "&" and "x" stay: they're part of names as
  * often as joins ("Simon & Garfunkel"), and matching takes the best artist pair.
  */
-function splitArtists(text: string): string[] {
+export function splitArtists(text: string): string[] {
   return text
     .split(/\s*(?:,|\bfeat\.|\bft\.|\bfeaturing\b)\s*/i)
     .map((a) => a.trim())

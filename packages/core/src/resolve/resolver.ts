@@ -5,6 +5,7 @@ import type { LinkMetadata, Recording, Resolution, ResolveCandidate, YtmSong } f
 import type { LibraryService } from '../services/library'
 import { parseLink, type TrackLink } from './links'
 import { enrichFromDeezer, readLink } from './metadata'
+import type { OdesliClient, OdesliMatch } from './odesli'
 import { CONFIDENT, linkTitle, PLAUSIBLE, scoreMatch } from './score'
 
 const MAX_CANDIDATES = 5
@@ -13,13 +14,15 @@ const MAX_CANDIDATES = 5
  * Turns a track link into the song to play (PLAN §5): read the link's metadata,
  * fill in an ISRC from Deezer, then match against the library and YouTube Music.
  * A confident match plays; anything less comes back as candidates, so a wrong
- * song never plays silently. Confident matches are cached by link.
+ * song never plays silently. Confident matches are cached by link. When all that
+ * finds nothing, Odesli (song.link) is asked, if it has an API key.
  */
 export class LinkResolver {
   constructor(
     private readonly db: Db,
     private readonly library: LibraryService,
     private readonly ytm: YtmCatalog,
+    private readonly odesli: OdesliClient,
     private readonly fetch: typeof globalThis.fetch = globalThis.fetch,
   ) {}
 
@@ -39,26 +42,30 @@ export class LinkResolver {
     const cached = this.cached(link)
     if (cached) return cached
 
-    const meta = await enrichFromDeezer(
-      await readLink(link, { fetch: this.fetch, ytm: this.ytm }),
-      this.fetch,
-    )
+    // Asked at most once, and only when needed: its API has a daily quota.
+    let odesli: Promise<OdesliMatch | undefined> | undefined
+    const askOdesli = () => (odesli ??= this.odesli.lookup(link))
+
+    const meta = await enrichFromDeezer(await this.readLink(link, askOdesli), this.fetch)
     const library = this.libraryCandidates(meta)
     const { songs, linked, linkedIsSong } = await this.ytmCandidates(link, meta, library.length > 0)
 
     // Precedence: what you own; a linked YTM song as it is; YTM's song version of a
     // linked video; then exactly the video linked.
     const confident = (list: ResolveCandidate[]) => list.find((c) => c.score >= CONFIDENT)
-    const match =
+    let match =
       confident(library) ??
       (linkedIsSong ? linked : undefined) ??
       confident(songs) ??
       linked ??
       null
+    const odesliSong = match ? undefined : await this.odesliCandidate(meta, await askOdesli())
+    if (odesliSong && odesliSong.score >= CONFIDENT) match = odesliSong
     const candidates = dedupe([
       ...(match ? [match] : []),
       ...library,
       ...songs,
+      ...(odesliSong ? [odesliSong] : []),
       ...(linked ? [linked] : []),
     ])
       .filter((c) => c.score >= PLAUSIBLE)
@@ -66,6 +73,46 @@ export class LinkResolver {
 
     if (match) this.remember(link, meta, match)
     return { link: meta, match, candidates, cached: false }
+  }
+
+  /**
+   * The link's own metadata. If that page or API fails, song.link may still know
+   * the song; its details have no duration, so they can't make a match confident alone.
+   */
+  private async readLink(
+    link: TrackLink,
+    askOdesli: () => Promise<OdesliMatch | undefined>,
+  ): Promise<LinkMetadata> {
+    try {
+      return await readLink(link, { fetch: this.fetch, ytm: this.ytm })
+    } catch (err) {
+      const found = err instanceof DomainError ? await askOdesli() : undefined
+      if (!found) throw err
+      return {
+        provider: link.provider,
+        title: found.title,
+        artists: found.artists,
+        album: null,
+        durationMs: null,
+        isrc: null,
+      }
+    }
+  }
+
+  /**
+   * The YTM song song.link matched the link to. Odesli matched it independently,
+   * so it plays if it plausibly agrees with what the link says; a different
+   * duration still rules it out.
+   */
+  private async odesliCandidate(
+    meta: LinkMetadata,
+    found: OdesliMatch | undefined,
+  ): Promise<ResolveCandidate | undefined> {
+    if (!found?.videoId) return undefined
+    const song = await this.ytm.getSong(found.videoId).catch(() => undefined)
+    if (!song) return undefined
+    const score = scoreMatch(meta, song)
+    return fromSong(song, score >= PLAUSIBLE ? Math.max(score, CONFIDENT) : score)
   }
 
   private libraryCandidates(meta: LinkMetadata): ResolveCandidate[] {

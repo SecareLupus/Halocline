@@ -58,3 +58,29 @@ describe('POST /v1/resolve', () => {
     expect((await post('/v1/queue/items', body.candidates[0]!.input)).status).toBe(201)
   })
 })
+
+describe('/v1/resolve/odesli', () => {
+  it('sets and removes the song.link key, never showing it', async () => {
+    core = createCore({ dbPath: ':memory:', ytm: offlineYtm })
+    const app = createApi(core)
+    const admin = core.tokens.create('a', ['admin']).secret
+    const reader = core.tokens.create('r', ['read']).secret
+    const put = (token: string, key: string | null) =>
+      app.request('/v1/resolve/odesli', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      })
+    const get = () =>
+      app.request('/v1/resolve/odesli', { headers: { Authorization: `Bearer ${reader}` } })
+
+    expect(await (await get()).json()).toEqual({ configured: false, lastError: null })
+    expect((await put(reader, 'k')).status).toBe(403)
+    const set = await put(admin, ' my-key ')
+    expect(set.status).toBe(200)
+    expect(await set.text()).not.toContain('my-key')
+    expect(await (await get()).json()).toEqual({ configured: true, lastError: null })
+    expect((await put(admin, '')).status).toBe(400)
+    expect(await (await put(admin, null)).json()).toEqual({ configured: false, lastError: null })
+  })
+})

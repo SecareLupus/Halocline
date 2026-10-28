@@ -301,6 +301,11 @@ h2 {
   margin: 8px 0;
 }
 
+.button-row input {
+  flex: 1;
+  max-width: 320px;
+}
+
 .field {
   display: grid !important;
   grid-template-columns: 120px minmax(0, 280px) auto;

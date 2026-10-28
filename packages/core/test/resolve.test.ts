@@ -32,8 +32,10 @@ const DEEZER_SEARCH = {
   ],
 }
 
+type Route = string | object | (() => Response)
+
 /** A fake network: canned bodies by URL prefix, with a count of requests made. */
-function fakeNetwork(routes: Record<string, string | object>) {
+function fakeNetwork(routes: Record<string, Route>) {
   const calls: string[] = []
   const fetch = (async (input: string | URL | Request) => {
     const url = String(input)
@@ -41,6 +43,7 @@ function fakeNetwork(routes: Record<string, string | object>) {
     const key = Object.keys(routes).find((prefix) => url.startsWith(prefix))
     if (!key) return new Response('not found', { status: 404 })
     const body = routes[key]!
+    if (typeof body === 'function') return body()
     return typeof body === 'string' ? new Response(body) : Response.json(body)
   }) as typeof globalThis.fetch
   return { fetch, calls }
@@ -70,7 +73,7 @@ function ytm(songs: YtmSong[], videos: YtmSong[] = []): YtmCatalog {
   }
 }
 
-function setup(songs: YtmSong[], routes: Record<string, string | object>, videos: YtmSong[] = []) {
+function setup(songs: YtmSong[], routes: Record<string, Route>, videos: YtmSong[] = []) {
   const net = fakeNetwork(routes)
   core = createCore({ dbPath: ':memory:', ytm: ytm(songs, videos), fetch: net.fetch })
   return { core, calls: net.calls }
@@ -239,5 +242,93 @@ describe('link resolution', () => {
     await expect(
       core.catalog.resolve('https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV'),
     ).rejects.toMatchObject({ type: 'not_found' })
+  })
+})
+
+describe('Odesli fallback', () => {
+  const TIDAL = 'https://tidal.com/browse/track/1781887'
+  const TIDAL_HTML = '<meta property="og:title" content="Daft Punk - One More Time">'
+  const ODESLI = 'https://api.song.link/'
+  const odesli = (videoId: string) => ({
+    entityUniqueId: 'TIDAL_SONG::1781887',
+    entitiesByUniqueId: {
+      'TIDAL_SONG::1781887': { title: 'One More Time', artistName: 'Daft Punk' },
+    },
+    linksByPlatform: { youtubeMusic: { url: `https://music.youtube.com/watch?v=${videoId}` } },
+  })
+  const songLinkCalls = (calls: string[]) => calls.filter((url) => url.startsWith(ODESLI))
+
+  it('is not asked without an API key', async () => {
+    const { core, calls } = setup([song('fa5IWHDbftI', 'One More Time', 321_000)], {
+      'https://tidal.com/browse/track/': TIDAL_HTML,
+      [ODESLI]: odesli('fa5IWHDbftI'),
+    })
+    expect((await core.catalog.preview(TIDAL)).match).toBeNull()
+    expect(songLinkCalls(calls)).toHaveLength(0)
+    expect(core.odesli.status()).toEqual({ configured: false, lastError: null })
+  })
+
+  it('settles a link nothing else could, once, and caches it', async () => {
+    const { core, calls } = setup([song('fa5IWHDbftI', 'One More Time', 321_000)], {
+      'https://tidal.com/browse/track/': TIDAL_HTML,
+      [ODESLI]: odesli('fa5IWHDbftI'),
+    })
+    core.odesli.setKey('secret-key')
+    const r = await core.catalog.preview(TIDAL)
+    expect(r.match).toMatchObject({ input: 'ytm:fa5IWHDbftI', source: 'ytm' })
+    expect(r.match!.score).toBeGreaterThanOrEqual(0.9)
+    const asked = songLinkCalls(calls)
+    expect(asked).toHaveLength(1)
+    expect(new URL(asked[0]!).searchParams.toString()).toBe(
+      'platform=tidal&type=song&id=1781887&key=secret-key',
+    )
+    expect((await core.catalog.preview(TIDAL)).cached).toBe(true)
+    expect(songLinkCalls(calls)).toHaveLength(1)
+  })
+
+  it("reads the song from song.link when the link's own page fails", async () => {
+    const { core } = setup(
+      [],
+      {
+        'https://open.spotify.com/track/': () => new Response('busy', { status: 503 }),
+        [ODESLI]: odesli('fa5IWHDbftI'),
+      },
+      [song('fa5IWHDbftI', 'One More Time', 321_000)],
+    )
+    core.odesli.setKey('secret-key')
+    const r = await core.catalog.preview('https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV')
+    expect(r.link).toMatchObject({ provider: 'spotify', title: 'One More Time' })
+    expect(r.match?.input).toBe('ytm:fa5IWHDbftI')
+  })
+
+  it('still checks the duration of what song.link matched', async () => {
+    const { core } = setup(
+      [],
+      {
+        'https://open.spotify.com/track/': SPOTIFY_HTML,
+        [ODESLI]: odesli('wU26xVT_vBU'),
+      },
+      [song('wU26xVT_vBU', 'One More Time', 235_000)],
+    )
+    core.odesli.setKey('secret-key')
+    const r = await core.catalog.preview('https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV')
+    expect(r.match).toBeNull()
+    expect(r.candidates).toHaveLength(0)
+  })
+
+  it('reports a rejected key without failing the resolve or revealing the key', async () => {
+    const { core } = setup([song('fa5IWHDbftI', 'One More Time', 321_000)], {
+      'https://tidal.com/browse/track/': TIDAL_HTML,
+      [ODESLI]: () => Response.json({ code: 'INVALID_ACCESS_KEY' }, { status: 401 }),
+    })
+    core.odesli.setKey('secret-key')
+    const r = await core.catalog.preview(TIDAL)
+    expect(r.match).toBeNull()
+    expect(r.candidates.map((c) => c.input)).toEqual(['ytm:fa5IWHDbftI'])
+    const status = core.odesli.status()
+    expect(status).toMatchObject({ configured: true })
+    expect(status.lastError).toContain('INVALID_ACCESS_KEY')
+    expect(status.lastError).not.toContain('secret-key')
+    expect(core.odesli.setKey(null)).toEqual({ configured: false, lastError: null })
   })
 })

@@ -9,6 +9,7 @@ import type { PageRuntime } from './providers/po-token'
 import { YtmStreamer } from './providers/ytm-stream'
 import { TrackCache } from './stream/track-cache'
 import { CatalogService } from './services/catalog'
+import { OdesliClient } from './resolve/odesli'
 import { LinkResolver } from './resolve/resolver'
 import { PlayerService } from './services/player'
 import { LibraryScanner, type ScannerOptions } from './services/scanner'
@@ -30,6 +31,7 @@ export {
 export { LibraryScanner, type ScannerOptions } from './services/scanner'
 export { CatalogService, parseYtmRef, type SearchScope } from './services/catalog'
 export { LinkResolver } from './resolve/resolver'
+export { OdesliClient, type OdesliMatch } from './resolve/odesli'
 export { parseLink, type TrackLink } from './resolve/links'
 export { jaroWinkler, scoreMatch, CONFIDENT, PLAUSIBLE } from './resolve/score'
 export {
@@ -77,6 +79,8 @@ export interface Core {
   scanner: LibraryScanner
   ytm: YtmCatalog
   catalog: CatalogService
+  /** The link resolver's song.link fallback, off until an API key is set. */
+  odesli: OdesliClient
   /** The direct YTM engine and its track cache, when a page runtime was given. */
   streamer: YtmStreamer | null
   tracks: TrackCache | null
@@ -131,10 +135,11 @@ export function createCore(options: {
   const ytm = ytmOptions
     ? new YtmProvider(events, { ...ytmOptions, playback: streamer !== null })
     : (options.ytm as YtmCatalog)
+  const odesli = new OdesliClient(db, options.fetch)
   const catalog = new CatalogService(
     library,
     ytm,
-    new LinkResolver(db, library, ytm, options.fetch),
+    new LinkResolver(db, library, ytm, odesli, options.fetch),
   )
   const player = new PlayerService(queue, library, settings, health, ytm, tracks, events)
   const tokens = new TokenService(db)
@@ -156,6 +161,7 @@ export function createCore(options: {
     scanner,
     ytm,
     catalog,
+    odesli,
     streamer,
     tracks,
     artworkDir: scannerOptions.artworkDir,
