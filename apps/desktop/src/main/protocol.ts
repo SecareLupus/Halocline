@@ -1,4 +1,4 @@
-import type { Core } from '@halocline/core'
+import { readLocalFile, type Core } from '@halocline/core'
 import { net, protocol } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -44,10 +44,8 @@ export function handleTrackProtocol(core: Core): void {
     if (!source) return new Response('Unknown source', { status: 404 })
     switch (source.kind) {
       case 'local':
-        // Forward Range headers so seeking works.
-        return allowCors(
-          await net.fetch(pathToFileURL(source.locator).toString(), { headers: request.headers }),
-        )
+        // Byte ranges, so seeking works.
+        return allowCors(await readLocalFile(source.locator, request.headers.get('range')))
       case 'ytm':
         // Served from the track cache, which downloads on first request (PLAN §4).
         if (!core.tracks) return new Response('No YouTube Music engine', { status: 501 })

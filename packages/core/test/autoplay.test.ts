@@ -57,6 +57,17 @@ describe('autoplay', () => {
     expect(queued().map(([title]) => title)).not.toContain('Bravo')
   })
 
+  it("doesn't queue another version of a song that's already waiting", async () => {
+    setup({ radio: [A, C], autoplay: { minQueueLength: 2, artistGap: 0 } })
+    const live = core.library.create({ title: 'Alpha (Live)', artists: ['Somebody'] })
+    core.queue.add({ recordingId: live.id, origin: 'user' })
+    await core.autoplay.check()
+    expect(queued()).toEqual([
+      ['Alpha (Live)', 'user'],
+      ['Charlie', 'autoplay'],
+    ])
+  })
+
   it('does nothing when off, or when the queue is long enough', async () => {
     setup({ radio: [A, C], autoplay: { enabled: false } })
     await core.autoplay.check()

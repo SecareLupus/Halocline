@@ -113,14 +113,14 @@ export class AutoplayService {
     const chosen: Candidate[] = []
     // The queue may have changed while YTM answered.
     for (let n = this.needed(this.settings.get()); n > 0; n--) {
-      const recentArtists = [
-        ...history.slice(0, artistGap).flatMap((r) => r.artists),
-        ...chosen.slice(-artistGap).flatMap((c) => c.artists),
-      ]
-      // Another version of a song just heard (a remix, a cover) is still a repeat.
-      const recentSongs = new Set(
-        [...history.slice(0, Math.max(artistGap, 1)), ...chosen].map((s) => songTitle(s.title)),
-      )
+      // A new song goes after everything queued, so queued songs count as the ones
+      // just before it: what's played, then what's waiting, in play order.
+      const played = history.slice(0, Math.max(artistGap, 1)).reverse()
+      const upcoming = this.queue.list().items.map((i) => i.recording)
+      const before = [...played, ...upcoming]
+      const recentArtists = artistGap ? before.slice(-artistGap).flatMap((r) => r.artists) : []
+      // Another version of a song just heard or coming up (a remix, a cover) is a repeat.
+      const recentSongs = new Set([...before, ...chosen].map((s) => songTitle(s.title)))
       const pool = this.eligible(candidates, recentArtists, recentSongs, settings).filter(
         (c) => !chosen.includes(c),
       )

@@ -3,6 +3,25 @@ import { call } from './bridge'
 import { Artwork } from './Search'
 import type { AppState } from './store'
 
+/**
+ * Transport icons as SVG: the ⏮ ⏭ glyphs come from whatever font has them, and
+ * their bar and arrows don't line up. Here each bar's centre meets the arrow points.
+ */
+const ICONS = {
+  previous: 'M5 5h2.5v14H5zM7.5 12 13.5 5v14zM13.5 12 19.5 5v14z',
+  next: 'M16.5 5H19v14h-2.5zM16.5 12 10.5 5v14zM10.5 12 4.5 5v14z',
+  play: 'M7 5 19 12 7 19z',
+  pause: 'M6.5 5h4v14h-4zM13.5 5h4v14h-4z',
+}
+
+function Icon(props: { name: keyof typeof ICONS }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d={ICONS[props.name]} fill="currentColor" />
+    </svg>
+  )
+}
+
 const formatTime = (ms: number) => {
   const s = Math.floor(ms / 1000)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -22,6 +41,14 @@ export function NowPlaying(props: { state: AppState }) {
   }
   const duration = () => p()?.current?.recording.durationMs ?? null
   const control = (fn: () => Promise<unknown>) => void props.state.run(fn)
+  /** Clicking the bar (or letting go after dragging along it) seeks there. */
+  const seek = (e: PointerEvent & { currentTarget: HTMLElement }) => {
+    const length = duration()
+    if (!length || !p()?.current) return
+    const box = e.currentTarget.getBoundingClientRect()
+    const at = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width))
+    control(() => call('player.patch', { positionMs: Math.round(at * length) }))
+  }
 
   return (
     <section class="now-playing">
@@ -31,17 +58,17 @@ export function NowPlaying(props: { state: AppState }) {
           aria-label="Previous"
           onClick={() => control(() => call('player.previous'))}
         >
-          ⏮
+          <Icon name="previous" />
         </button>
         <button
           type="button"
           aria-label={p()?.playing ? 'Pause' : 'Play'}
           onClick={() => control(() => call('player.patch', { playing: !p()?.playing }))}
         >
-          {p()?.playing ? '⏸' : '▶'}
+          <Icon name={p()?.playing ? 'pause' : 'play'} />
         </button>
         <button type="button" aria-label="Next" onClick={() => control(() => call('player.next'))}>
-          ⏭
+          <Icon name="next" />
         </button>
       </div>
       <Show
@@ -64,7 +91,18 @@ export function NowPlaying(props: { state: AppState }) {
         </Show>
         <div class="progress">
           <span>{formatTime(position())}</span>
-          <div class="bar">
+          <div
+            class="bar"
+            classList={{ seekable: Boolean(duration() && p()?.current) }}
+            role="slider"
+            aria-label="Seek"
+            aria-valuemin={0}
+            aria-valuemax={duration() ?? 0}
+            aria-valuenow={Math.round(position())}
+            // Captured, so releasing past either end of the bar still seeks.
+            onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+            onPointerUp={(e) => seek(e)}
+          >
             <div
               class="fill"
               style={{

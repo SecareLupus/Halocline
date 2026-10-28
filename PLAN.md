@@ -513,7 +513,8 @@ the source is set to. Recommended size: 375×140.
 
 - **Progress bar:** the full width of the source, along the bottom edge.
 - **Album art:** a square pushed all the way left. It fills the height from the top of the source
-  to the top of the bar.
+  to the top of the bar, up to the layout's design height (140 px less the bar,
+  `--hl-art-max-size`), so a tall source doesn't blow it up.
 - **Text:** two rows to the right of the art, vertically centered above the bar.
   - Row 1 is **Artist**; multiple artists are joined with ", ".
   - Row 2 is **Song Title**.
@@ -536,7 +537,8 @@ the source is set to. Recommended size: 375×140.
 **Restyling without an editor:**
 - Elements have stable class names, and colours, fonts and sizes are CSS custom properties
   (`--hl-font`, `--hl-text-color`, `--hl-bar-color`, `--hl-bar-track-color`, `--hl-bar-height`,
-  `--hl-gap`).
+  `--hl-art-max-size`, `--hl-gap`). The bar's track is translucent dark under a white fill, so
+  the fill's edge shows on light and dark scenes.
 - OBS's Browser Source has a **Custom CSS** field, so these can be overridden per scene without
   touching Halocline.
 

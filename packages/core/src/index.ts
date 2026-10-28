@@ -74,6 +74,7 @@ export {
   type YtmStreamerOptions,
 } from './providers/ytm-stream'
 export { TrackCache, parseRange, type TrackStore } from './stream/track-cache'
+export { readLocalFile } from './stream/local-file'
 export type { ScanInput, ScanMessage, ScanRunner, ScannedFile } from './scan/types'
 export { HealthService } from './services/health'
 export { EngineRouter, type EngineName } from './services/engine-router'

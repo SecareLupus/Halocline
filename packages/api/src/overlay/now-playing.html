@@ -16,8 +16,11 @@
         --hl-artist-color: var(--hl-text-color);
         --hl-text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
         --hl-bar-color: #ffffff;
-        --hl-bar-track-color: rgb(255 255 255 / 0.25);
+        /* Dark and translucent, so the white fill's edge shows on light and dark scenes. */
+        --hl-bar-track-color: rgb(0 0 0 / 0.45);
         --hl-bar-height: 6px;
+        /* The layout's design height (140px) less the bar: art stops growing there. */
+        --hl-art-max-size: calc(140px - var(--hl-bar-height));
         --hl-gap: 16px;
         --hl-art-placeholder: rgb(255 255 255 / 0.15);
         --hl-fade-ms: 300ms;
@@ -59,6 +62,7 @@
       .hl-art {
         flex: none;
         height: 100%;
+        max-height: var(--hl-art-max-size);
         aspect-ratio: 1;
         background: var(--hl-art-placeholder);
         background-size: cover;

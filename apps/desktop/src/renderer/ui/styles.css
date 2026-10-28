@@ -151,6 +151,15 @@ h2 {
   opacity: 0.4;
 }
 
+/* Where a dragged song would land: a line above or below the row under the pointer. */
+.list li.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.list li.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
 .track {
   display: flex;
   flex-direction: column;
@@ -200,6 +209,11 @@ h2 {
   gap: 4px;
 }
 
+.transport button {
+  display: grid;
+  place-items: center;
+}
+
 .current {
   display: flex;
   flex-direction: column;
@@ -221,6 +235,19 @@ h2 {
   background: var(--border);
   border-radius: 2px;
   overflow: hidden;
+  /* A taller hit area than the 4px it draws, for clicking to seek. */
+  background-clip: content-box;
+  padding: 6px 0;
+  height: 16px;
+  box-sizing: border-box;
+}
+
+.bar.seekable {
+  cursor: pointer;
+}
+
+.bar.seekable:hover .fill {
+  background: var(--text);
 }
 
 .fill {
