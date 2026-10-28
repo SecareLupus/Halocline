@@ -206,6 +206,8 @@ export function createCore(options: {
   const analysis = new AnalysisService(db, library, settings, tracks, events)
   const autoplay = new AutoplayService(library, queue, settings, ytm, analysis, events, {
     watch: options.autoplay !== false,
+    // On repeat the queue goes round; adding songs would only grow the loop.
+    repeating: () => player.get().repeat !== 'off',
     ...options.autoplay,
   })
   const tokens = new TokenService(db)

@@ -52,6 +52,14 @@ export function QueueList(props: { state: AppState }) {
             }}
           />
           Autoplay
+          <Show
+            when={
+              (props.state.settings()?.autoplay.enabled ?? true) &&
+              (props.state.player()?.repeat ?? 'off') !== 'off'
+            }
+          >
+            <span title="Repeat cycles the queue, so nothing new is added">(paused on repeat)</span>
+          </Show>
         </label>
       </div>
       <Show when={items().length} fallback={<p class="empty">The queue is empty.</p>}>

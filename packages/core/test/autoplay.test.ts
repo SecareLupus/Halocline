@@ -94,6 +94,16 @@ describe('autoplay', () => {
     ])
   })
 
+  it('stands down while the player is on repeat', async () => {
+    setup({ radio: [A, C] })
+    core.player.patch({ repeat: 'all' })
+    await core.autoplay.check()
+    expect(queued()).toEqual([])
+    core.player.patch({ repeat: 'off' })
+    await core.autoplay.check()
+    expect(queued()).toHaveLength(2)
+  })
+
   it('does nothing when off, or when the queue is long enough', async () => {
     setup({ radio: [A, C], autoplay: { enabled: false } })
     await core.autoplay.check()

@@ -340,7 +340,7 @@ the app rather than a CDN, so it works offline under a strict CSP. Reading needs
 | Method & path | Purpose |
 |---|---|
 | `GET /v1/player` | state: track, position, playing, volume, engine, repeat, shuffle |
-| `PATCH /v1/player` | set playing, volume, position, repeat, shuffle. `repeat: all` puts each song, finished or skipped, back on the end of the queue (keeping its requester and pinned source; failed songs aren't, so nothing loops on an error), `one` replays the song, and `shuffle` plays a random queued song next (picked when cued, so gapless preloading still holds). The volume is remembered between runs |
+| `PATCH /v1/player` | set playing, volume, position, repeat, shuffle. `repeat: all` puts each song, finished or skipped, back on the end of the queue (keeping its requester and pinned source; failed songs aren't, so nothing loops on an error), `one` replays the song, and `shuffle` plays a random queued song next (picked when cued, so gapless preloading still holds). The volume is remembered between runs. The player page reports the queue item it's playing with its progress; if that differs from Now Playing for more than 2 s after a change (a race between the page moving on and a change from the core), the core reloads Now Playing on it and logs `[player] … resyncing` |
 | `POST /v1/player/next` · `/previous` | transport |
 | `GET /v1/queue` | items + revision |
 | `POST /v1/queue/items` | `{ input: url \| query \| recordingId, position: next \| end \| {after: itemId}, requestedBy? }`. Resolves and enqueues in one call. `201` on success, `409 stream_safe_violation`, `422 match_ambiguous` with candidates |
@@ -440,7 +440,8 @@ Phase 5, first part, as built (`services/autoplay.ts`, `autoplay/rank.ts`): auto
 audio analysis, scored as "tracks without features" above.
 - **When:** on queue, track and settings changes, while autoplay is on and the queue is shorter
   than "Keep queued". The seed is the last song in the queue, since new songs follow it; the one
-  playing when nothing is queued. Plays are counted when a track starts (`play_count`,
+  playing when nothing is queued. While the player is on repeat it doesn't add anything: the queue
+  goes round, and new songs would only grow the loop. Plays are counted when a track starts (`play_count`,
   `last_played_at`), which gives the recent-artist and recent-song history. The queue pane has an
   Autoplay switch (the same `autoplay.enabled` setting).
 - **Candidates:**

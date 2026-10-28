@@ -56,16 +56,24 @@ export class AutoplayService {
     private readonly options: {
       /** React to queue, track and settings changes; otherwise only `check()` fills. */
       watch?: boolean
+      /** Whether the player is on repeat: the queue then cycles, and isn't topped up. */
+      repeating?: () => boolean
       random?: () => number
       now?: () => number
     } = {},
   ) {
     const watched = new Set(['queue.changed', 'track.changed', 'settings.changed'])
+    let repeat: string | undefined
     this.unsubscribe =
       options.watch === false
         ? () => {}
         : events.subscribe((e) => {
             if (watched.has(e.type)) void this.check()
+            // Repeat turned off: the queue may need topping up again.
+            else if (e.type === 'player.changed' && e.data.repeat !== repeat) {
+              repeat = e.data.repeat
+              void this.check()
+            }
           })
   }
 
@@ -96,7 +104,7 @@ export class AutoplayService {
   }
 
   private needed(settings: Settings): number {
-    if (!settings.autoplay.enabled) return 0
+    if (!settings.autoplay.enabled || this.options.repeating?.()) return 0
     return settings.autoplay.minQueueLength - this.queue.list().items.length
   }
 

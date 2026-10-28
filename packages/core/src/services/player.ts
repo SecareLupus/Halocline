@@ -43,7 +43,13 @@ export type PlayerCommand =
 
 /** What an engine reports back. */
 export type PlayerReport =
-  | { type: 'progress'; positionMs: number; playing: boolean }
+  | {
+      type: 'progress'
+      positionMs: number
+      playing: boolean
+      /** The queue item actually playing, from engines that know it. */
+      queueItemId?: string
+    }
   | { type: 'ad'; active: boolean }
   /** The player moved on to the cued track by itself. */
   | { type: 'advanced'; queueItemId: string }
@@ -52,6 +58,12 @@ export type PlayerReport =
   | { type: 'output'; state: OutputState }
 
 const RESTART_THRESHOLD_MS = 3_000
+/**
+ * Progress from an engine playing something other than Now Playing is put right
+ * after this long; shorter than this after a change, it's a report already on
+ * its way when the change was sent.
+ */
+const DRIFT_GRACE_MS = 2_000
 const HISTORY_LIMIT = 50
 
 interface Cue {
@@ -74,6 +86,8 @@ export class PlayerService {
   private busy = false
   /** On shuffle, the queue item picked to play next; kept so the cued track is the one played. */
   private shufflePick: string | null = null
+  /** When the playing track last changed, for telling drift from reports in flight. */
+  private switchedAt = 0
   private readonly now: () => number
   private readonly random: () => number
 
@@ -93,7 +107,7 @@ export class PlayerService {
       volume?: { get(): number | null; set(volume: number): void }
     } = {},
   ) {
-    this.now = options.now ?? Date.now
+    this.now = options.now ?? (() => Date.now())
     this.random = options.random ?? (() => Math.random())
     this.state = {
       playing: false,
@@ -226,6 +240,10 @@ export class PlayerService {
   report(report: PlayerReport): void {
     switch (report.type) {
       case 'progress':
+        if (report.queueItemId && this.current && report.queueItemId !== this.current.id) {
+          this.drifted(report.queueItemId)
+          break
+        }
         if (this.state.current?.engine === 'direct') this.health.directSucceeded()
         this.update({
           positionMs: report.positionMs,
@@ -252,6 +270,23 @@ export class PlayerService {
     }
   }
 
+  /**
+   * The engine says it's playing a different queue item than Now Playing shows
+   * (a race between it moving on and a change from here). Now Playing is what
+   * people see, so the engine is put back on it, where it should be by now.
+   */
+  private drifted(playingId: string): void {
+    if (this.now() - this.switchedAt < DRIFT_GRACE_MS || !this.current) return
+    const load = this.prepare(this.current)
+    console.warn(
+      `[player] engine was playing queue item ${playingId}, not ${this.current.id}; resyncing`,
+    )
+    this.switchedAt = this.now()
+    if (!load) return void this.skip(false)
+    this.send({ type: 'load', ...load, startMs: this.positionNow(), play: this.state.playing })
+    this.recue()
+  }
+
   private start(item: QueueItem, startMs = 0, forceFallback = false): PlayerState {
     const load = this.allowed(item) ? this.prepare(item, forceFallback) : undefined
     if (!load) {
@@ -261,6 +296,7 @@ export class PlayerService {
     }
     if (load.engine === 'fallback') this.health.fallbackUsed()
     this.current = item
+    this.switchedAt = this.now()
     this.send({ type: 'load', ...load, startMs, play: true })
     const trackChanged = this.state.current?.queueItemId !== item.id
     this.update(
@@ -290,9 +326,25 @@ export class PlayerService {
 
   /** The player started the cued track itself (gapless or crossfaded). */
   private advanced(queueItemId: string): void {
-    const cue = this.cued
-    if (!cue || cue.item.id !== queueItemId) return
+    let cue = this.cued
+    if (!cue || cue.item.id !== queueItemId) {
+      // It moved on to a track cued before a later change reached it. The current
+      // song again (repeat-one) is fine as it is; a song still queued is what plays
+      // now; anything else, the engine is put back on Now Playing.
+      if (queueItemId === this.current?.id) {
+        this.update({ positionMs: 0, positionAt: this.now() })
+        return
+      }
+      const item = this.queue.list().items.find((i) => i.id === queueItemId)
+      const load = item && this.prepare(item)
+      if (!item || !load) {
+        this.switchedAt = 0
+        return this.drifted(queueItemId)
+      }
+      cue = { item, load }
+    }
     this.cued = null
+    this.switchedAt = this.now()
     const finished = this.current
     const repeatingOne = finished?.id === cue.item.id
     if (finished && !repeatingOne) {

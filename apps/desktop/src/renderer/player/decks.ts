@@ -250,6 +250,8 @@ export class Decks {
         type: 'progress',
         positionMs: Math.round(audio.currentTime * 1000),
         playing: !audio.paused,
+        // So the core can tell if this ever stops matching Now Playing.
+        ...(this.playing && { queueItemId: this.playing.nowPlaying.queueItemId }),
       })
     }
     audio.addEventListener('timeupdate', () => progress(false))

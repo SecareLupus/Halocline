@@ -291,3 +291,43 @@ describe('volume', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 })
+
+describe('keeping the engine on Now Playing', () => {
+  afterEach(() => vi.useRealTimers())
+  const loadsOf = (sent: PlayerCommand[]) =>
+    sent.flatMap((c) => (c.type === 'load' ? [c.nowPlaying.recording.title] : []))
+
+  it('puts an engine that drifted back on Now Playing, after reports in flight', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const { enqueue, sent } = setup()
+    enqueue('A')
+    const b = enqueue('B')
+    core.player.patch({ playing: true })
+    // A report already on its way when the track changed: left alone.
+    core.player.report({ type: 'progress', positionMs: 5000, playing: true, queueItemId: b.id })
+    expect(loadsOf(sent)).toEqual(['A'])
+    // Still out of step a few seconds later: reloaded at Now Playing's position.
+    vi.setSystemTime(Date.now() + 5000)
+    core.player.report({ type: 'progress', positionMs: 5000, playing: true, queueItemId: b.id })
+    expect(loadsOf(sent)).toEqual(['A', 'A'])
+    expect(sent.filter((c) => c.type === 'load').at(-1)).toMatchObject({
+      startMs: expect.any(Number),
+      play: true,
+    })
+    expect(core.player.get().current?.recording.title).toBe('A')
+  })
+
+  it("follows an engine that moved on to a queued song it wasn't cued for", () => {
+    const { enqueue } = setup()
+    enqueue('A')
+    enqueue('B')
+    const c = enqueue('C')
+    core.player.patch({ playing: true })
+    core.player.report({ type: 'advanced', queueItemId: c.id })
+    expect(core.player.get().current?.recording.title).toBe('C')
+    expect(core.queue.list().items.map((i) => i.recording.title)).toEqual(['B'])
+    // The same song again (a repeat-one copy) just starts over.
+    core.player.report({ type: 'advanced', queueItemId: c.id })
+    expect(core.player.get()).toMatchObject({ current: { recording: { title: 'C' } } })
+  })
+})
