@@ -244,8 +244,11 @@ Matching:
    within ±3 s.
 3. **A confidence threshold decides the outcome.** Above it, the song is enqueued. Below it, the
    API returns the candidates (§6), so a wrong song never plays silently.
-4. **Odesli/song.link** is used only when steps 1–3 find nothing. It can be disabled in settings.
-5. Resolutions are cached by URL.
+4. Resolutions are cached by URL.
+
+There's no third-party link-matching fallback. Odesli (song.link) closed its public API in 2026 and
+stopped issuing keys; the paid replacements (MusicLink, Musicfetch) aren't worth a key for the few
+links Deezer plus YTM search can't settle, which get candidates instead.
 
 As built (`packages/core/src/resolve/`):
 - **Reading links:**
@@ -276,8 +279,6 @@ As built (`packages/core/src/resolve/`):
   alternatives with their scores.
 - **Cache:** confident matches only, keyed by provider and track ID, so tracking parameters don't
   matter. A library match whose recording is gone is dropped.
-- **Odesli is not built.** Its public API now answers `401 PUBLIC_API_ACCESS_DEPRECATED` and needs
-  an API key. Deezer plus YTM search covered every link tried so far.
 - **Not built:** the optional Spotify API credentials for ISRCs. Deezer supplies them.
 
 ## 6. API
@@ -508,7 +509,6 @@ No decision gates. Both YTM engines are in scope from the start.
 **Phase 4: link resolver.**
 - Parsers and metadata fetchers.
 - Matcher and the candidate flow.
-- Odesli fallback.
 - Resolution cache.
 
 **Phase 5: autoplay.**
