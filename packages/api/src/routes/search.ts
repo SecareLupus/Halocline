@@ -1,4 +1,4 @@
-import { OdesliKey, OdesliStatus, Resolution, SearchResult, type Core } from '@halocline/core'
+import { Resolution, SearchResult, type Core } from '@halocline/core'
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import { requireScope, type ApiEnv } from '../auth'
 import { authErrors, errorResponse } from '../problem'
@@ -69,47 +69,5 @@ export function registerSearch(app: OpenAPIHono<ApiEnv>, core: Core) {
       },
     }),
     async (c) => c.json(await core.catalog.preview(c.req.valid('json').input), 200),
-  )
-
-  app.openapi(
-    createRoute({
-      method: 'get',
-      path: '/v1/resolve/odesli',
-      tags: ['search'],
-      summary: 'Whether the Odesli (song.link) fallback has an API key, and its last error',
-      middleware: [requireScope('read')],
-      responses: {
-        200: {
-          description: 'Fallback status',
-          content: { 'application/json': { schema: OdesliStatus } },
-        },
-        ...authErrors,
-      },
-    }),
-    (c) => c.json(core.odesli.status(), 200),
-  )
-
-  app.openapi(
-    createRoute({
-      method: 'put',
-      path: '/v1/resolve/odesli',
-      tags: ['search'],
-      summary: 'Set or remove the Odesli (song.link) API key',
-      description:
-        'Links that nothing else matches are looked up on song.link while a key is set ' +
-        '(PLAN §5 step 4). `null` removes the key. The key is never returned.',
-      middleware: [requireScope('admin')],
-      request: {
-        body: { content: { 'application/json': { schema: OdesliKey } }, required: true },
-      },
-      responses: {
-        200: {
-          description: 'Fallback status',
-          content: { 'application/json': { schema: OdesliStatus } },
-        },
-        ...authErrors,
-      },
-    }),
-    (c) => c.json(core.odesli.setKey(c.req.valid('json').key), 200),
   )
 }

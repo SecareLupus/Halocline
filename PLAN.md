@@ -244,8 +244,7 @@ Matching:
    within ±3 s.
 3. **A confidence threshold decides the outcome.** Above it, the song is enqueued. Below it, the
    API returns the candidates (§6), so a wrong song never plays silently.
-4. **Odesli/song.link** is used only when steps 1–3 find nothing. It's on only while an API key is
-   set in settings.
+4. **Odesli/song.link** is used only when steps 1–3 find nothing. It can be disabled in settings.
 5. Resolutions are cached by URL.
 
 As built (`packages/core/src/resolve/`):
@@ -277,20 +276,8 @@ As built (`packages/core/src/resolve/`):
   alternatives with their scores.
 - **Cache:** confident matches only, keyed by provider and track ID, so tracking parameters don't
   matter. A library match whose recording is gone is dropped.
-- **Odesli fallback** (`resolve/odesli.ts`):
-  - Odesli closed its public API (`401 PUBLIC_API_ACCESS_DEPRECATED`) and stopped issuing keys;
-    access is by allowlisting. So it's off until a key is set: Settings → Link matching, or
-    `PUT /v1/resolve/odesli` (admin). The key is stored in the database's kv table and never
-    returned; `GET /v1/resolve/odesli` gives only whether one is set and the last error.
-  - It's asked at most once per link, by platform and track ID, and only when nothing is
-    confident, or when the link's own page or API fails (then song.link's title and artist stand
-    in, without a duration).
-  - Its YouTube Music link is fetched with `getSong` and scored like any candidate. Because Odesli
-    matched it independently, a plausible score (≥ 0.6) is raised to confident; a duration more
-    than 3 s off still rules it out.
-  - Errors (a rejected key, the daily quota) never fail the resolve. They're shown in settings
-    without the URL, which carries the key.
-  - Confident matches are cached like any other, which keeps quota use down.
+- **Odesli is not built.** Its public API now answers `401 PUBLIC_API_ACCESS_DEPRECATED` and needs
+  an API key. Deezer plus YTM search covered every link tried so far.
 - **Not built:** the optional Spotify API credentials for ISRCs. Deezer supplies them.
 
 ## 6. API
@@ -323,7 +310,6 @@ the domain layer uses (Hono + `@hono/zod-openapi`, with interactive docs served 
 | `DELETE /v1/queue/items/{id}` · `DELETE /v1/queue/items` | remove or clear |
 | `GET /v1/search?q=&scope=library\|ytm\|all` | unified results; each carries `recordingId` (or a provider ref) and its available sources |
 | `POST /v1/resolve` | link to a match or candidates, without enqueueing |
-| `GET` · `PUT /v1/resolve/odesli` | whether the song.link fallback has a key and its last error; set or remove the key (admin) |
 | `GET /v1/library/recordings` · `PATCH /v1/library/recordings/{id}` | browse; add or remove from library; set `stream_safe` and tags (with a bulk variant) |
 | `GET /v1/artwork/{recordingId}?size=` | album art: art embedded in local files is extracted at scan time, YTM thumbnails are proxied and resized. Cached either way |
 | `GET /v1/health` | engine status, last errors, scan progress |

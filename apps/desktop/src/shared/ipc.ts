@@ -4,7 +4,6 @@ import type {
   ApiToken,
   BulkResult,
   Health,
-  OdesliStatus,
   OutputState,
   PlayerCommand,
   PlayerPatch,
@@ -43,10 +42,6 @@ export interface IpcHandlers {
   resolve: (args: { input: string }) => Resolution
   /** Enqueues by resolving `input`: a candidate's input, a link, a ref or a recording ID. */
   'queue.addInput': (args: { input: string; position?: QueuePosition }) => QueueItem
-  /** The song.link fallback for links nothing else matches; off without an API key. */
-  'odesli.status': () => OdesliStatus
-  /** Sets the song.link API key, or removes it with `null`. */
-  'odesli.setKey': (args: { key: string | null }) => OdesliStatus
   'ytm.status': () => YtmStatus
   'ytm.signIn': () => void
   'ytm.signOut': () => void

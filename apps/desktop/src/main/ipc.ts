@@ -2,7 +2,6 @@ import {
   BulkRecordingPatch,
   DomainError,
   Id,
-  OdesliKey,
   PlayerPatch,
   QueuePosition,
   RecordingPatch,
@@ -52,8 +51,6 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
         ...(position && { position }),
       })
     },
-    'odesli.status': () => core.odesli.status(),
-    'odesli.setKey': (a) => core.odesli.setKey(OdesliKey.parse(a).key),
     'queue.addYtm': (a) => {
       const { song, position } = z
         .object({ song: YtmSong, position: QueuePosition.optional() })
