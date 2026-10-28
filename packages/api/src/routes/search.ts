@@ -22,9 +22,12 @@ export function registerSearch(app: OpenAPIHono<ApiEnv>, core: Core) {
       method: 'get',
       path: '/v1/search',
       tags: ['search'],
-      summary: 'Search the library and YouTube Music songs',
+      summary: 'Search the library, YouTube Music songs, and YouTube Music albums and playlists',
       description:
-        'Library results come first. YTM results carry a `ref` to pass as `input` to `POST /v1/queue/items`.',
+        'Library results come first, then YTM songs, then up to four YTM albums and four playlists ' +
+        "(`ytm-collection`). A song's `ref` goes to `POST /v1/queue/items` as `input`; an album's " +
+        "or playlist's `ref` to `GET /v1/collections/{ref}` (its tracks) or " +
+        '`POST /v1/queue/collections` (all of it).',
       middleware: [requireScope('read')],
       request: { query: SearchQuery },
       responses: {

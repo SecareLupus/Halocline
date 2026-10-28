@@ -37,7 +37,23 @@ export function QueueList(props: { state: AppState }) {
 
   return (
     <section class="pane">
-      <h2>Up next</h2>
+      <div class="pane-header">
+        <h2>Up next</h2>
+        <label
+          class="toggle"
+          title="Add similar songs when the queue runs low (more options in Settings → Autoplay)"
+        >
+          <input
+            type="checkbox"
+            checked={props.state.settings()?.autoplay.enabled ?? true}
+            onChange={(e) => {
+              const enabled = e.currentTarget.checked
+              void props.state.run(() => call('settings.patch', { autoplay: { enabled } }))
+            }}
+          />
+          Autoplay
+        </label>
+      </div>
       <Show when={items().length} fallback={<p class="empty">The queue is empty.</p>}>
         <ol class="list">
           <For each={items()}>

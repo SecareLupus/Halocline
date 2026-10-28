@@ -184,6 +184,23 @@ export const YtmStatus = z.object({
 export type YtmStatus = z.infer<typeof YtmStatus>
 
 /** Unified search: library hits first, then YTM songs not already in the library. */
+/** A YouTube Music album or playlist, as found by search. */
+export const YtmCollection = z.object({
+  /** `ytm-album:<browseId>` or `ytm-playlist:<playlistId>`. Pass to `POST /v1/queue/collections`. */
+  ref: z.string(),
+  kind: z.enum(['album', 'playlist']),
+  title: z.string(),
+  /** The album's artist, or the playlist's author. */
+  by: z.string().nullable(),
+  year: z.string().nullable(),
+  artwork: z.url().nullable(),
+})
+export type YtmCollection = z.infer<typeof YtmCollection>
+
+/** An album or playlist with its tracks, in order. */
+export const YtmCollectionDetail = YtmCollection.extend({ songs: z.array(YtmSong) })
+export type YtmCollectionDetail = z.infer<typeof YtmCollectionDetail>
+
 export const SearchResult = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('library'), recording: Recording, sources: z.array(Source) }),
   z.object({
@@ -192,6 +209,7 @@ export const SearchResult = z.discriminatedUnion('kind', [
     ref: z.string(),
     song: YtmSong,
   }),
+  z.object({ kind: z.literal('ytm-collection'), collection: YtmCollection }),
 ])
 export type SearchResult = z.infer<typeof SearchResult>
 

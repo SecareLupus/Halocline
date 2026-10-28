@@ -1,7 +1,7 @@
 import { Innertube, YTNodes } from 'youtubei.js'
 import type { EventBus } from '../events'
 import { DomainError } from '../errors'
-import type { YtmAccount, YtmSong, YtmStatus } from '../schemas'
+import type { YtmAccount, YtmCollection, YtmCollectionDetail, YtmSong, YtmStatus } from '../schemas'
 
 /** What the rest of the core needs from YouTube Music. Tests supply a fake. */
 export interface YtmCatalog {
@@ -10,6 +10,14 @@ export interface YtmCatalog {
   getSong(videoId: string): Promise<YtmSong | undefined>
   /** YTM's radio for a song (its up-next list), best first, without the song itself. */
   getRadio(videoId: string): Promise<YtmSong[]>
+  /** Albums or playlists matching a search. */
+  searchCollections(
+    query: string,
+    kind: YtmCollection['kind'],
+    limit?: number,
+  ): Promise<YtmCollection[]>
+  /** An album's or playlist's tracks; undefined if YouTube Music has no such thing. */
+  getCollection(ref: string): Promise<YtmCollectionDetail | undefined>
   /** Rebuilds the session, e.g. after signing in or out. */
   refresh(): Promise<void>
   /** The channels the signed-in account can use; empty when signed out. */
@@ -80,6 +88,19 @@ export interface YtmProviderOptions {
 }
 
 const VIDEO_ID = /^[\w-]{11}$/
+
+/** Long playlists are read in pages; this many tracks is plenty for a queue. */
+export const MAX_COLLECTION_SONGS = 500
+
+const COLLECTION_REF = /^ytm-(album|playlist):([\w-]+)$/
+
+/** `ytm-album:<browseId>` or `ytm-playlist:<playlistId>`, split; undefined for anything else. */
+export function parseCollectionRef(
+  ref: string,
+): { kind: YtmCollection['kind']; id: string } | undefined {
+  const match = COLLECTION_REF.exec(ref.trim())
+  return match ? { kind: match[1] as YtmCollection['kind'], id: match[2]! } : undefined
+}
 
 /** Google thumbnail URLs carry their size; ask for a larger square. */
 export function upscaleArtwork(url: string | undefined): string | null {
@@ -246,6 +267,101 @@ export class YtmProvider implements YtmCatalog {
         })
       }
       return songs
+    })
+  }
+
+  async searchCollections(
+    query: string,
+    kind: YtmCollection['kind'],
+    limit = 8,
+  ): Promise<YtmCollection[]> {
+    return this.guard(async () => {
+      const search = await (await this.innertube()).music.search(query, { type: kind })
+      const items = (search.contents?.filterType(YTNodes.MusicShelf) ?? []).flatMap((s) => [
+        ...s.contents,
+      ])
+      return items
+        .filter((item) => item.item_type === kind && item.id)
+        .slice(0, limit)
+        .map((item) => ({
+          ref: `ytm-${kind}:${item.id}`,
+          kind,
+          title: item.title ?? 'Untitled',
+          by: item.author?.name ?? item.artists?.map((a) => a.name).join(', ') ?? null,
+          year: item.year ?? null,
+          artwork: upscaleArtwork(item.thumbnails?.[0]?.url),
+        }))
+    })
+  }
+
+  async getCollection(ref: string): Promise<YtmCollectionDetail | undefined> {
+    const parsed = parseCollectionRef(ref)
+    if (!parsed) return undefined
+    return this.guard(async () => {
+      const yt = await this.innertube()
+      if (parsed.kind === 'album') {
+        const album = await yt.music.getAlbum(parsed.id)
+        const header = album.header as
+          | {
+              title?: unknown
+              strapline_text_one?: unknown
+              subtitle?: unknown
+              thumbnail?: { contents?: { url: string }[] }
+            }
+          | undefined
+        const title = header?.title ? String(header.title) : 'Untitled album'
+        const by = header?.strapline_text_one ? String(header.strapline_text_one) : null
+        const year =
+          /\b(\d{4})\b/.exec(header?.subtitle ? String(header.subtitle) : '')?.[1] ?? null
+        const artwork = upscaleArtwork(header?.thumbnail?.contents?.[0]?.url)
+        // Album tracks carry neither artist nor art: both come from the album.
+        const songs = album.contents.flatMap((t): YtmSong[] =>
+          t.id && VIDEO_ID.test(t.id)
+            ? [
+                {
+                  videoId: t.id,
+                  title: t.title ?? 'Untitled',
+                  artists: t.artists?.length ? t.artists.map((a) => a.name) : by ? [by] : [],
+                  album: title,
+                  durationMs: t.duration?.seconds ? t.duration.seconds * 1000 : null,
+                  artwork,
+                },
+              ]
+            : [],
+        )
+        return { ref, kind: 'album', title, by, year, artwork, songs }
+      }
+      let page = await yt.music.getPlaylist(parsed.id)
+      const header = page.header as { title?: unknown; subtitle?: unknown } | undefined
+      const items = [...(page.items ?? [])]
+      while (page.has_continuation && items.length < MAX_COLLECTION_SONGS) {
+        page = await page.getContinuation()
+        items.push(...(page.items ?? []))
+      }
+      const songs = items.slice(0, MAX_COLLECTION_SONGS).flatMap((t): YtmSong[] => {
+        const item = t as YTNodes.MusicResponsiveListItem
+        if (!item.id || !VIDEO_ID.test(item.id)) return []
+        const artists = (item.artists ?? item.authors ?? []).map((a) => a.name).filter(Boolean)
+        return [
+          {
+            videoId: item.id,
+            title: item.title ?? 'Untitled',
+            artists,
+            album: item.album?.name ?? null,
+            durationMs: item.duration?.seconds ? item.duration.seconds * 1000 : null,
+            artwork: upscaleArtwork(item.thumbnail?.contents?.[0]?.url),
+          },
+        ]
+      })
+      return {
+        ref,
+        kind: 'playlist',
+        title: header?.title ? String(header.title) : 'Untitled playlist',
+        by: null,
+        year: null,
+        artwork: songs[0]?.artwork ?? null,
+        songs,
+      }
     })
   }
 

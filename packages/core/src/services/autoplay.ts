@@ -106,10 +106,14 @@ export class AutoplayService {
     const { artistGap } = settings.autoplay
     // The song playing is the latest played: plays are counted when a track starts.
     const history = this.library.recentlyPlayed(Math.max(artistGap, 1))
-    const seed = history[0]
+    // New songs go at the end of the queue, so they follow on from the last song
+    // queued; from the one playing when nothing is queued.
+    const queued = this.queue.list().items.map((i) => i.recording)
+    const seed = queued.at(-1) ?? history[0]
     if (!seed) return
+    const around = [...history, ...queued].filter((r) => r.id !== seed.id)
 
-    const candidates = await this.candidates(seed, history, settings)
+    const candidates = await this.candidates(seed, around, settings)
     const chosen: Candidate[] = []
     // The queue may have changed while YTM answered.
     for (let n = this.needed(this.settings.get()); n > 0; n--) {
@@ -139,9 +143,10 @@ export class AutoplayService {
   }
 
   /** Every candidate with its evidence, scored and sorted best first. */
+  /** `around`: the other songs just played or queued, whose artists count a little too. */
   private async candidates(
     seed: Recording,
-    history: Recording[],
+    around: Recording[],
     settings: Settings,
   ): Promise<Candidate[]> {
     const byKey = new Map<string, Candidate>()
@@ -150,7 +155,7 @@ export class AutoplayService {
       if (!c) byKey.set(key, (c = { key, ...base, evidence: [], score: 0 }))
       return c
     }
-    const recentArtists = history.slice(1).flatMap((r) => r.artists)
+    const recentArtists = around.flatMap((r) => r.artists)
     const relate = (c: Candidate) => {
       c.evidence.push({
         score: artistScore(c.artists, seed.artists, recentArtists),

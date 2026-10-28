@@ -182,6 +182,8 @@ export function toFtsQuery(text: string): string | undefined {
 const CANONICAL_ID = 'coalesce((SELECT recording_id FROM recording_aliases WHERE id = ?), ?)'
 
 export class LibraryService {
+  private batch: Set<string> | null = null
+
   constructor(
     private readonly db: Db,
     private readonly events: EventBus,
@@ -233,8 +235,25 @@ export class LibraryService {
   }
 
   notifyChanged(recordingIds: string[]): void {
-    if (recordingIds.length)
-      this.events.publish({ type: 'library.changed', data: { recordingIds } })
+    if (!recordingIds.length) return
+    if (this.batch) for (const id of recordingIds) this.batch.add(id)
+    else this.events.publish({ type: 'library.changed', data: { recordingIds } })
+  }
+
+  /**
+   * Runs `fn` with its `library.changed` events gathered into one, e.g. for the
+   * songs of an album added at once (listeners re-query on each event).
+   */
+  batched<T>(fn: () => T): T {
+    if (this.batch) return fn()
+    this.batch = new Set()
+    try {
+      return fn()
+    } finally {
+      const ids = [...this.batch]
+      this.batch = null
+      this.notifyChanged(ids)
+    }
   }
 
   findByIsrc(isrc: string): Recording | undefined {

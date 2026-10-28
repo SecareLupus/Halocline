@@ -74,6 +74,8 @@ function ytm(songs: YtmSong[], videos: YtmSong[] = []): YtmCatalog {
     searchSongs: async () => songs,
     getSong: async (id) => [...songs, ...videos].find((s) => s.videoId === id),
     getRadio: async () => [],
+    searchCollections: async () => [],
+    getCollection: async () => undefined,
     accounts: async () => [],
     selectAccount: async () => {
       throw new Error('signed out')

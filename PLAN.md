@@ -337,7 +337,8 @@ the domain layer uses (Hono + `@hono/zod-openapi`, with interactive docs served 
 | `POST /v1/queue/items` | `{ input: url \| query \| recordingId, position: next \| end \| {after: itemId}, requestedBy? }`. Resolves and enqueues in one call. `201` on success, `409 stream_safe_violation`, `422 match_ambiguous` with candidates |
 | `PATCH /v1/queue/items/{id}` | move or pin a source |
 | `DELETE /v1/queue/items/{id}` · `DELETE /v1/queue/items` | remove or clear |
-| `GET /v1/search?q=&scope=library\|ytm\|all` | unified results; each carries `recordingId` (or a provider ref) and its available sources |
+| `GET /v1/search?q=&scope=library\|ytm\|all` | unified results; each carries `recordingId` (or a provider ref) and its available sources. YTM albums and playlists come last (`ytm-collection`, up to four of each) |
+| `GET /v1/collections/{ref}` · `POST /v1/queue/collections` | an album's or playlist's tracks (`ytm-album:…`, `ytm-playlist:…`; playlists cut at 500); enqueue all of it in order, as one change. In stream-safe mode untagged songs are left out and counted in `skipped` |
 | `POST /v1/resolve` | link to a match or candidates, without enqueueing |
 | `GET /v1/library/recordings` · `PATCH /v1/library/recordings/{id}` | browse; add or remove from library; set `stream_safe` and tags (with a bulk variant) |
 | `GET /v1/analysis` | audio analysis progress (§7) |
@@ -428,8 +429,10 @@ features.
 Phase 5, first part, as built (`services/autoplay.ts`, `autoplay/rank.ts`): autoplay without
 audio analysis, scored as "tracks without features" above.
 - **When:** on queue, track and settings changes, while autoplay is on and the queue is shorter
-  than "Keep queued". The song playing is the seed: plays are now counted when a track starts
-  (`play_count`, `last_played_at`), which also gives the recent-artist and recent-song history.
+  than "Keep queued". The seed is the last song in the queue, since new songs follow it; the one
+  playing when nothing is queued. Plays are counted when a track starts (`play_count`,
+  `last_played_at`), which gives the recent-artist and recent-song history. The queue pane has an
+  Autoplay switch (the same `autoplay.enabled` setting).
 - **Candidates:**
   - YTM's radio (up-next with automix) for the seed, through its YTM source or a search for it.
     Radio songs already in the database count as those recordings, so in library-only or
@@ -665,6 +668,9 @@ Each attaches through the §8 extension points.
 4. **Visualizer widget:** needs frequency data streamed from Halocline over WebSocket.
 
 **Other:**
+- A **History** (recently played) page: what played and when, with the engine and who requested
+  it, and quick actions (play again, save to library, tag stream-safe). Needs a plays table:
+  today only `play_count` and `last_played_at` are kept per recording.
 - Twitch chat song requests (`!sr <link|query>`): built on a `queue:add`-scoped token, with
   per-user limits, mod approval, vote-to-skip, and stream-safe enforcement.
 - More providers: SoundCloud, Bandcamp, Subsonic/Navidrome, Tidal, Deezer.

@@ -4,6 +4,8 @@ import type {
   Resolution,
   SearchResult,
   Source,
+  YtmCollection,
+  YtmCollectionDetail,
   YtmSong,
 } from '@halocline/core'
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js'
@@ -22,6 +24,8 @@ export function Search(props: { state: AppState }) {
   const hasFolders = () => (props.state.settings()?.library.folders.length ?? 0) > 0
   const library = () => results().flatMap((r) => (r.kind === 'library' ? [r.recording] : []))
   const cloud = () => results().flatMap((r) => (r.kind === 'ytm' ? [r.song] : []))
+  const collections = () =>
+    results().flatMap((r) => (r.kind === 'ytm-collection' ? [r.collection] : []))
   const sourcesOf = () =>
     new Map(results().flatMap((r) => (r.kind === 'library' ? [[r.recording.id, r.sources]] : [])))
   const cloudOnly = (id: string) =>
@@ -252,6 +256,22 @@ export function Search(props: { state: AppState }) {
             </For>
           </ul>
         </Show>
+        <Show when={collections().length}>
+          <div class="results-bar">
+            <span class="empty">Albums &amp; playlists</span>
+          </div>
+          <ul class="list">
+            <For each={collections()}>
+              {(c) => (
+                <CollectionRow
+                  collection={c}
+                  state={props.state}
+                  enqueueSong={(song, position) => void enqueueYtm(song, position)}
+                />
+              )}
+            </For>
+          </ul>
+        </Show>
       </Show>
     </section>
   )
@@ -284,6 +304,109 @@ function RecordingMenu(props: { sources: Source[]; onChoose: (choice: string) =>
         </For>
       </Show>
     </select>
+  )
+}
+
+const collectionStates = new Map<string, ReturnType<typeof newCollectionState>>()
+
+function newCollectionState() {
+  const [open, setOpen] = createSignal(false)
+  const [detail, setDetail] = createSignal<YtmCollectionDetail | null>(null)
+  const [note, setNote] = createSignal<string | null>(null)
+  return { open, setOpen, detail, setDetail, note, setNote }
+}
+
+/** One album's or playlist's open/closed state, tracks and last note, by ref. */
+function collectionState(ref: string) {
+  let state = collectionStates.get(ref)
+  if (!state) collectionStates.set(ref, (state = newCollectionState()))
+  return state
+}
+
+/**
+ * An album or playlist from YouTube Music: queue all of it, or open it to queue
+ * single tracks. Its tracks are fetched when first opened or added.
+ */
+function CollectionRow(props: {
+  collection: YtmCollection
+  state: AppState
+  enqueueSong: (song: YtmSong, position: 'next' | 'end') => void
+}) {
+  // Kept per album or playlist, not per row: the results are re-fetched (and the
+  // rows rebuilt) whenever the library changes, e.g. right after "Add all".
+  // eslint-disable-next-line solid/reactivity -- a row's ref never changes
+  const { open, setOpen, detail, setDetail, note, setNote } = collectionState(props.collection.ref)
+  const kind = () => (props.collection.kind === 'album' ? 'Album' : 'Playlist')
+  const toggle = () =>
+    // eslint-disable-next-line solid/reactivity -- only called from event handlers
+    props.state.run(async () => {
+      if (!detail()) setDetail(await call('collection.get', { ref: props.collection.ref }))
+      setOpen(!open())
+    })
+  const addAll = (position: 'next' | 'end') =>
+    // eslint-disable-next-line solid/reactivity -- only called from event handlers
+    props.state.run(async () => {
+      const added = await call('queue.addCollection', { ref: props.collection.ref, position })
+      const n = added.items.length
+      setNote(
+        `Added ${n} song${n === 1 ? '' : 's'}` +
+          (added.skipped ? ` (${added.skipped} not stream-safe, left out)` : ''),
+      )
+    })
+  return (
+    <li class="collection">
+      <div class="collection-row">
+        <TrackLabel
+          track={{
+            title: props.collection.title,
+            artists: [[kind(), props.collection.by].filter(Boolean).join(' · ')],
+            album: props.collection.year,
+            artwork: props.collection.artwork,
+          }}
+        />
+        <span class="actions">
+          <button type="button" aria-expanded={open()} onClick={() => void toggle()}>
+            {open() ? 'Hide tracks' : 'Tracks'}
+          </button>
+          <button
+            type="button"
+            title={`Play this ${kind().toLowerCase()} next`}
+            onClick={() => void addAll('next')}
+          >
+            Next
+          </button>
+          <button
+            type="button"
+            title={`Add the whole ${kind().toLowerCase()} to the queue`}
+            onClick={() => void addAll('end')}
+          >
+            Add all
+          </button>
+        </span>
+      </div>
+      <Show when={note()}>{(text) => <p class="empty collection-note">{text()}</p>}</Show>
+      <Show when={open() && detail()}>
+        {(d) => (
+          <ol class="list tracks">
+            <For each={d().songs} fallback={<li class="empty">No playable tracks.</li>}>
+              {(song) => (
+                <li>
+                  <TrackLabel track={song} />
+                  <span class="actions">
+                    <button type="button" onClick={() => props.enqueueSong(song, 'next')}>
+                      Next
+                    </button>
+                    <button type="button" onClick={() => props.enqueueSong(song, 'end')}>
+                      Add
+                    </button>
+                  </span>
+                </li>
+              )}
+            </For>
+          </ol>
+        )}
+      </Show>
+    </li>
   )
 }
 

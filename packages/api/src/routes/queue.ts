@@ -1,4 +1,13 @@
-import { DomainError, Id, Queue, QueueItem, QueuePosition, type Core } from '@halocline/core'
+import {
+  DomainError,
+  Id,
+  Queue,
+  QueueItem,
+  QueuePosition,
+  YtmCollection,
+  YtmCollectionDetail,
+  type Core,
+} from '@halocline/core'
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import { requireScope, type ApiEnv } from '../auth'
@@ -12,6 +21,23 @@ const AddItem = z.object({
   position: QueuePosition.default('end'),
   requestedBy: z.string().max(100).optional(),
 })
+
+const AddCollection = z.object({
+  /** `ytm-album:<browseId>` or `ytm-playlist:<playlistId>`, from search results. */
+  ref: z.string().min(1).max(200),
+  position: QueuePosition.default('end'),
+  requestedBy: z.string().max(100).optional(),
+})
+
+const AddedCollection = z.object({
+  collection: YtmCollection,
+  /** The new queue items, in order. */
+  items: z.array(QueueItem),
+  /** Songs left out because stream-safe mode is on and they aren't tagged. */
+  skipped: z.number().int().nonnegative(),
+})
+
+const CollectionParams = z.object({ ref: z.string().min(1).max(200) })
 
 const UpdateItem = z
   .object({ position: QueuePosition, pinnedSourceId: Id.nullable() })
@@ -32,6 +58,69 @@ function expectedRevision(c: Context): number | undefined {
 }
 
 export function registerQueue(app: OpenAPIHono<ApiEnv>, core: Core) {
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/collections/{ref}',
+      tags: ['queue'],
+      summary: 'A YouTube Music album or playlist, with its tracks',
+      description: 'Long playlists are cut at 500 tracks.',
+      middleware: [requireScope('read')],
+      request: { params: CollectionParams },
+      responses: {
+        200: {
+          description: 'The album or playlist',
+          content: { 'application/json': { schema: YtmCollectionDetail } },
+        },
+        ...authErrors,
+        400: errorResponse('Not an album or playlist ref'),
+        404: errorResponse('YouTube Music has no such album or playlist'),
+        503: errorResponse('YouTube Music is unreachable'),
+      },
+    }),
+    async (c) => c.json(await core.catalog.collection(c.req.valid('param').ref), 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/queue/collections',
+      tags: ['queue'],
+      summary: 'Enqueue a whole album or playlist',
+      description:
+        "Adds every track, in order, as one queue change. The songs aren't saved to the library. " +
+        'In stream-safe mode only tagged songs are added; the rest are counted in `skipped`.',
+      middleware: [requireScope('queue:add', 'queue:manage')],
+      request: {
+        headers: ifMatchHeader,
+        body: { content: { 'application/json': { schema: AddCollection } }, required: true },
+      },
+      responses: {
+        201: {
+          description: 'Enqueued',
+          content: { 'application/json': { schema: AddedCollection } },
+        },
+        ...authErrors,
+        400: errorResponse('Not an album or playlist ref'),
+        404: errorResponse('YouTube Music has no such album or playlist'),
+        412: errorResponse('revision_mismatch'),
+        503: errorResponse('YouTube Music is unreachable'),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid('json')
+      const revision = expectedRevision(c)
+      const added = await core.catalog.enqueueCollection(body.ref, {
+        position: body.position,
+        origin: 'api',
+        ...(body.requestedBy !== undefined && { requestedBy: body.requestedBy }),
+        ...(revision !== undefined && { expectedRevision: revision }),
+      })
+      c.header('ETag', `"${core.queue.revision}"`)
+      return c.json(added, 201)
+    },
+  )
+
   app.openapi(
     createRoute({
       method: 'get',

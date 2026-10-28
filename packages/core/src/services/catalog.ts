@@ -1,5 +1,5 @@
 import { DomainError } from '../errors'
-import type { YtmCatalog } from '../providers/ytm'
+import { parseCollectionRef, type YtmCatalog } from '../providers/ytm'
 import { candidateSong, type LinkResolver } from '../resolve/resolver'
 import { looksLikeUrl } from '../resolve/links'
 import type {
@@ -8,13 +8,19 @@ import type {
   Resolution,
   ResolveCandidate,
   SearchResult,
+  QueueItem,
   SplitResult,
+  YtmCollection,
+  YtmCollectionDetail,
   YtmSong,
 } from '../schemas'
 import type { LibraryService } from './library'
-import type { QueueService } from './queue'
+import type { AddToQueue, QueueService } from './queue'
 
 export type SearchScope = 'library' | 'ytm' | 'all'
+
+/** Albums and playlists shown per search, of each kind. */
+const COLLECTIONS_PER_KIND = 4
 
 /**
  * The videoId in a `ytm:<id>` ref: an explicit pick (a search result or a
@@ -82,7 +88,7 @@ export class CatalogService {
     this.library.update(recordingId, { title, artists, album, durationMs, artwork })
   }
 
-  /** Library hits first (PLAN §1), then YTM songs that aren't already among them. */
+  /** Library hits first (PLAN §1), then YTM songs not already among them, then YTM albums and playlists. */
   async search(query: string, scope: SearchScope = 'all', limit = 25): Promise<SearchResult[]> {
     const results: SearchResult[] = []
     const inResults = new Set<string>()
@@ -94,6 +100,12 @@ export class CatalogService {
       }
     }
     if (scope !== 'library') {
+      // Albums and playlists are extras: if they fail, the songs still show.
+      const collections = Promise.all(
+        (['album', 'playlist'] as const).map((kind) =>
+          this.ytm.searchCollections(query, kind, COLLECTIONS_PER_KIND).catch(() => []),
+        ),
+      )
       let songs: YtmSong[] = []
       try {
         songs = await this.ytm.searchSongs(query, limit)
@@ -110,14 +122,43 @@ export class CatalogService {
         if (!inResults.has(song.videoId))
           results.push({ kind: 'ytm', ref: `ytm:${song.videoId}`, song })
       }
+      for (const collection of (await collections).flat())
+        results.push({ kind: 'ytm-collection', collection })
     }
     return results
   }
 
+  /** A YouTube Music album or playlist with its tracks (`ytm-album:…`, `ytm-playlist:…`). */
+  async collection(ref: string): Promise<YtmCollectionDetail> {
+    if (!parseCollectionRef(ref)) {
+      throw new DomainError('invalid_request', `Not an album or playlist ref: ${ref}`)
+    }
+    let found: YtmCollectionDetail | undefined
+    try {
+      found = await this.ytm.getCollection(ref)
+    } catch (err) {
+      throw new DomainError('provider_unavailable', `YouTube Music lookup failed: ${String(err)}`)
+    }
+    if (!found) throw new DomainError('not_found', `YouTube Music has no ${ref}`)
+    return found
+  }
+
   /**
-   * Turns an input into a recording: a recordingId, a YTM ref or link, or a
-   * library query with exactly one match. Other links wait for the resolver (PLAN §5).
+   * Queues a whole album or playlist, in order, as one change. Its songs aren't
+   * saved to the library. In stream-safe mode, only those you've tagged are queued.
    */
+  async enqueueCollection(
+    ref: string,
+    options: Omit<AddToQueue, 'recordingId'>,
+  ): Promise<{ collection: YtmCollection; items: QueueItem[]; skipped: number }> {
+    const { songs, ...collection } = await this.collection(ref)
+    const recordingIds = this.library.batched(() =>
+      this.library.transaction(() => songs.map((song) => this.library.ensureYtmSong(song).id)),
+    )
+    const { items, skipped } = this.queue.addMany({ ...options, recordingIds })
+    return { collection, items, skipped: skipped.length }
+  }
+
   /**
    * Turns "something to play" into a recording: a recording ID, a `ytm:` ref, a
    * track link (PLAN §5) or a library search. Anything short of one confident

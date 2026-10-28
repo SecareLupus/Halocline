@@ -3,6 +3,7 @@ import {
   type Core,
   type NewRecording,
   type YtmCatalog,
+  type YtmCollectionDetail,
   type YtmSong,
   type YtmStatus,
 } from '../src'
@@ -23,7 +24,12 @@ export function song(core: Core, title: string, extra: Partial<NewRecording> = {
 /** An offline YTM catalog with a fixed song list. */
 export function fakeYtm(
   songs: YtmSong[] = [],
-  options: { playback?: boolean; down?: boolean; radio?: Record<string, YtmSong[]> } = {},
+  options: {
+    playback?: boolean
+    down?: boolean
+    radio?: Record<string, YtmSong[]>
+    collections?: YtmCollectionDetail[]
+  } = {},
 ): YtmCatalog {
   const status: YtmStatus = {
     signedIn: false,
@@ -40,6 +46,13 @@ export function fakeYtm(
       return songs.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()))
     },
     getSong: async (id) => songs.find((s) => s.videoId === id),
+    searchCollections: async (q, kind) => {
+      if (options.down) throw new Error('offline')
+      return (options.collections ?? [])
+        .filter((c) => c.kind === kind && c.title.toLowerCase().includes(q.toLowerCase()))
+        .map(({ songs: _songs, ...c }) => c)
+    },
+    getCollection: async (ref) => options.collections?.find((c) => c.ref === ref),
     accounts: async () => [],
     selectAccount: async () => status,
     getRadio: async (id) => {

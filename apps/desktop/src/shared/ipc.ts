@@ -27,6 +27,8 @@ import type {
   SplitResult,
   StampedEvent,
   YtmAccount,
+  YtmCollection,
+  YtmCollectionDetail,
   YtmSong,
   YtmStatus,
 } from '@halocline/core'
@@ -43,6 +45,14 @@ export interface IpcHandlers {
   /** Library first, then YouTube Music songs. */
   search: (args: { q: string }) => SearchResult[]
   'queue.addYtm': (args: { song: YtmSong; position?: QueuePosition }) => QueueItem
+  /** A YouTube Music album or playlist with its tracks. */
+  'collection.get': (args: { ref: string }) => YtmCollectionDetail
+  /** Queues a whole album or playlist, in order. */
+  'queue.addCollection': (args: { ref: string; position?: QueuePosition }) => {
+    collection: YtmCollection
+    items: QueueItem[]
+    skipped: number
+  }
   /** What a pasted link (or query) means, without enqueueing (PLAN §5). */
   resolve: (args: { input: string }) => Resolution
   /** Enqueues by resolving `input`: a candidate's input, a link, a ref or a recording ID. */

@@ -13,6 +13,8 @@ export const offlineYtm: YtmCatalog = {
   searchSongs: async () => [],
   getSong: async () => undefined,
   getRadio: async () => [],
+  searchCollections: async () => [],
+  getCollection: async () => undefined,
   accounts: async () => [],
   selectAccount: async () => {
     throw new Error('signed out')

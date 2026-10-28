@@ -55,7 +55,9 @@ export { parseLink, type TrackLink } from './resolve/links'
 export { jaroWinkler, scoreMatch, CONFIDENT, PLAUSIBLE } from './resolve/score'
 export {
   activeAccountName,
+  MAX_COLLECTION_SONGS,
   parseAccountId,
+  parseCollectionRef,
   toYtmAccount,
   YtmProvider,
   type YtmIdentity,

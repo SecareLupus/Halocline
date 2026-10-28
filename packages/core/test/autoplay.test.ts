@@ -23,14 +23,21 @@ const B = track('bbbbbbbbbbb', 'Bravo', 'Seed Artist')
 const C = track('ccccccccccc', 'Charlie', 'Third Artist')
 
 function setup(
-  options: { radio?: YtmSong[]; down?: boolean; playback?: boolean; autoplay?: object } = {},
+  options: {
+    radio?: YtmSong[]
+    /** Radio for other songs, by videoId: autoplay follows on from the last queued one. */
+    radios?: Record<string, YtmSong[]>
+    down?: boolean
+    playback?: boolean
+    autoplay?: object
+  } = {},
 ) {
   core = createCore({
     dbPath: ':memory:',
     ytm: fakeYtm([], {
       playback: options.playback ?? true,
       down: options.down ?? false,
-      radio: { [SEED.videoId]: options.radio ?? [] },
+      radio: { [SEED.videoId]: options.radio ?? [], ...options.radios },
     }),
     autoplay: { random: () => 0, now: () => NOW },
   })
@@ -44,13 +51,14 @@ const queued = () => core.queue.list().items.map((i) => [i.recording.title, i.or
 
 describe('autoplay', () => {
   it('tops the queue up from YTM radio, skipping the artist just heard', async () => {
-    setup({ radio: [B, A, C] })
+    setup({ radio: [B, A, C], radios: { [C.videoId]: [B, A] } })
     await core.autoplay.check()
     expect(queued()).toEqual([
       ['Alpha', 'autoplay'],
       ['Charlie', 'autoplay'],
     ])
-    // Short again once one is taken: one more, and still not the same artist.
+    // Short again once one is taken: one more, following on from Charlie, and still
+    // not the artist heard just before.
     core.queue.remove(core.queue.list().items[0]!.id)
     await core.autoplay.check()
     expect(queued()).toHaveLength(2)
@@ -58,13 +66,31 @@ describe('autoplay', () => {
   })
 
   it("doesn't queue another version of a song that's already waiting", async () => {
-    setup({ radio: [A, C], autoplay: { minQueueLength: 2, artistGap: 0 } })
-    const live = core.library.create({ title: 'Alpha (Live)', artists: ['Somebody'] })
-    core.queue.add({ recordingId: live.id, origin: 'user' })
+    const LIVE = track('lllllllllll', 'Alpha (Live)', 'Somebody')
+    setup({ radios: { [LIVE.videoId]: [A, C] }, autoplay: { minQueueLength: 2, artistGap: 0 } })
+    core.queue.add({ recordingId: core.library.ensureYtmSong(LIVE).id, origin: 'user' })
     await core.autoplay.check()
     expect(queued()).toEqual([
       ['Alpha (Live)', 'user'],
       ['Charlie', 'autoplay'],
+    ])
+  })
+
+  it('follows on from the last queued song, not the one playing', async () => {
+    const D = track('ddddddddddd', 'Delta', 'Fourth Artist')
+    const E = track('eeeeeeeeeee', 'Echo', 'Fifth Artist')
+    core = createCore({
+      dbPath: ':memory:',
+      ytm: fakeYtm([], { playback: true, radio: { [SEED.videoId]: [A], [D.videoId]: [E] } }),
+      autoplay: { random: () => 0, now: () => NOW },
+    })
+    core.settings.patch({ autoplay: { adventurousness: 0, minQueueLength: 2 } })
+    core.library.markPlayed(core.library.ensureYtmSong(SEED).id, new Date(NOW))
+    core.queue.add({ recordingId: core.library.ensureYtmSong(D).id, origin: 'user' })
+    await core.autoplay.check()
+    expect(queued()).toEqual([
+      ['Delta', 'user'],
+      ['Echo', 'autoplay'],
     ])
   })
 

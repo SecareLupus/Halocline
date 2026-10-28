@@ -85,6 +85,39 @@ export class QueueService {
     return this.get(id)
   }
 
+  /**
+   * Adds several recordings at once, in order and as one change (an album, a
+   * playlist). In stream-safe mode the untagged ones are left out and listed in
+   * `skipped`, rather than failing the lot.
+   */
+  addMany(input: Omit<AddToQueue, 'recordingId'> & { recordingIds: string[] }): {
+    items: QueueItem[]
+    skipped: string[]
+  } {
+    const safeOnly = this.settings.get().streamSafeMode
+    const recordings = input.recordingIds.map((id) => this.library.require(id))
+    const kept = recordings.filter((r) => !safeOnly || r.streamSafe)
+    const skipped = recordings.filter((r) => !kept.includes(r)).map((r) => r.id)
+    const ids = kept.map(() => randomUUID())
+    if (kept.length) {
+      this.mutate(input.expectedRevision, () => {
+        const start = this.insertionIndex(input.position ?? 'end')
+        this.db
+          .prepare('UPDATE queue_items SET position = position + ? WHERE position >= ?')
+          .run(kept.length, start)
+        const insert = this.db.prepare(
+          `INSERT INTO queue_items (id, recording_id, origin, requested_by, added_at, position)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        const now = new Date().toISOString()
+        kept.forEach((r, i) =>
+          insert.run(ids[i], r.id, input.origin, input.requestedBy ?? null, now, start + i),
+        )
+      })
+    }
+    return { items: ids.map((id) => this.get(id)), skipped }
+  }
+
   move(id: string, position: QueuePosition, expectedRevision?: number): QueueItem {
     this.mutate(expectedRevision, () => {
       if (typeof position === 'object' && position.after === id) return
