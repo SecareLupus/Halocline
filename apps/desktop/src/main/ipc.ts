@@ -55,9 +55,11 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
     },
     'collection.get': (a) =>
       core.catalog.collection(z.object({ ref: z.string().min(1).max(200) }).parse(a).ref),
+    'collection.match': (a) =>
+      core.catalog.matchCollection(z.object({ input: z.string().min(1).max(2000) }).parse(a).input),
     'queue.addCollection': (a) => {
       const { ref, position } = z
-        .object({ ref: z.string().min(1).max(200), position: QueuePosition.optional() })
+        .object({ ref: z.string().min(1).max(2000), position: QueuePosition.optional() })
         .parse(a)
       return core.catalog.enqueueCollection(ref, { origin: 'user', ...(position && { position }) })
     },

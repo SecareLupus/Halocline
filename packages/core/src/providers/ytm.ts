@@ -333,6 +333,12 @@ export class YtmProvider implements YtmCatalog {
       }
       let page = await yt.music.getPlaylist(parsed.id)
       const header = page.header as { title?: unknown; subtitle?: unknown } | undefined
+      // An album shared as a playlist (OLAK5uy_…) comes without a header; its tracks
+      // name the album, which has the title, artist, year and art.
+      const albumId = (page.items?.[0] as YTNodes.MusicResponsiveListItem | undefined)?.album?.id
+      if (!header?.title && /^(VL)?OLAK5uy_/.test(parsed.id) && albumId?.startsWith('MPREb_')) {
+        return this.getCollection(`ytm-album:${albumId}`)
+      }
       const items = [...(page.items ?? [])]
       while (page.has_continuation && items.length < MAX_COLLECTION_SONGS) {
         page = await page.getContinuation()

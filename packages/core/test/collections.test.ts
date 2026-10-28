@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createCore, type Core, type YtmCollectionDetail } from '../src'
+import { createCore, parseCollectionLink, type Core, type YtmCollectionDetail } from '../src'
 import { fakeYtm, ytmSong } from './helpers'
 
 let core: Core
@@ -83,6 +83,40 @@ describe('albums and playlists', () => {
     const added = await core.catalog.enqueueCollection(DISCOVERY.ref, { origin: 'api' })
     expect(added.skipped).toBe(2)
     expect(titles()).toEqual(['Aerodynamic'])
+  })
+
+  it('are recognised from their links', () => {
+    const cases: [string, string | undefined][] = [
+      ['https://music.youtube.com/browse/MPREb_7ltM34kr0mH', 'ytm-album:MPREb_7ltM34kr0mH'],
+      // An album's Share link.
+      [
+        'https://music.youtube.com/playlist?list=OLAK5uy_mz6eafmqdRHSaR4IwG0ll6J6rgv0_ZpGw&si=x',
+        'ytm-playlist:OLAK5uy_mz6eafmqdRHSaR4IwG0ll6J6rgv0_ZpGw',
+      ],
+      ['https://www.youtube.com/playlist?list=PLSdoVPM5Wnne', 'ytm-playlist:PLSdoVPM5Wnne'],
+      ['https://music.youtube.com/browse/VLPLSdoVPM5Wnne', 'ytm-playlist:VLPLSdoVPM5Wnne'],
+      // A song played from a playlist is the song.
+      ['https://music.youtube.com/watch?v=fa5IWHDbftI&list=PLSdoVPM5Wnne', undefined],
+      ['https://example.com/playlist?list=PL1', undefined],
+      ['daft punk', undefined],
+    ]
+    for (const [link, ref] of cases) expect(parseCollectionLink(link), link).toBe(ref)
+  })
+
+  it('can be looked up and queued by link', async () => {
+    setup()
+    const link = 'https://music.youtube.com/browse/MPREb_discovery'
+    expect((await core.catalog.matchCollection(link))?.title).toBe('Discovery')
+    expect(
+      await core.catalog.matchCollection('https://music.youtube.com/watch?v=aaaaaaaaaaa'),
+    ).toBeNull()
+    await core.catalog.enqueueCollection(link, { origin: 'user' })
+    expect(titles()).toEqual(['One More Time', 'Aerodynamic', 'Digital Love'])
+    // A single queue item can't take one; the error says what can.
+    await expect(core.catalog.resolve(link)).rejects.toMatchObject({
+      type: 'invalid_request',
+      message: expect.stringContaining('/v1/queue/collections'),
+    })
   })
 
   it('reject refs that are wrong or unknown', async () => {

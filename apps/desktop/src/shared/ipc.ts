@@ -47,6 +47,8 @@ export interface IpcHandlers {
   'queue.addYtm': (args: { song: YtmSong; position?: QueuePosition }) => QueueItem
   /** A YouTube Music album or playlist with its tracks. */
   'collection.get': (args: { ref: string }) => YtmCollectionDetail
+  /** The album or playlist a pasted link names; null for any other input. */
+  'collection.match': (args: { input: string }) => YtmCollectionDetail | null
   /** Queues a whole album or playlist, in order. */
   'queue.addCollection': (args: { ref: string; position?: QueuePosition }) => {
     collection: YtmCollection

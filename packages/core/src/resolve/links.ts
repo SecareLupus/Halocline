@@ -76,4 +76,29 @@ export function parseLink(input: string): TrackLink | undefined {
   }
 }
 
+/**
+ * A YouTube Music album or playlist link as a collection ref (`ytm-album:…`,
+ * `ytm-playlist:…`): music.youtube.com/browse/MPREb_… for an album, or
+ * …/playlist?list=… on either site. An album's Share link is a playlist link
+ * (`OLAK5uy_…`). A watch link with a `list` is a song, not its playlist.
+ */
+export function parseCollectionLink(input: string): string | undefined {
+  let url: URL
+  try {
+    url = new URL(input.trim())
+  } catch {
+    return undefined
+  }
+  const host = url.hostname.toLowerCase().replace(/^(www|m)\./, '')
+  if (host !== 'music.youtube.com' && host !== 'youtube.com') return undefined
+  const path = url.pathname.split('/').filter(Boolean)
+  const list = url.searchParams.get('list')
+  if (path[0] === 'playlist' && list && /^[\w-]+$/.test(list)) return `ytm-playlist:${list}`
+  if (path[0] === 'browse' && path[1]) {
+    if (/^MPREb_[\w-]+$/.test(path[1])) return `ytm-album:${path[1]}`
+    if (/^VL[\w-]+$/.test(path[1])) return `ytm-playlist:${path[1]}`
+  }
+  return undefined
+}
+
 export const looksLikeUrl = (s: string) => /^(https?:\/\/|spotify:)/i.test(s.trim())

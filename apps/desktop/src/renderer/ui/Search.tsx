@@ -20,6 +20,8 @@ export function Search(props: { state: AppState }) {
   const [query, setQuery] = createSignal('')
   const [results, setResults] = createSignal<SearchResult[]>([])
   const [resolution, setResolution] = createSignal<Resolution | null>(null)
+  /** A pasted album or playlist link, shown like a search result. */
+  const [pasted, setPasted] = createSignal<YtmCollection | null>(null)
   const [searching, setSearching] = createSignal(false)
   const hasFolders = () => (props.state.settings()?.library.folders.length ?? 0) > 0
   const library = () => results().flatMap((r) => (r.kind === 'library' ? [r.recording] : []))
@@ -45,6 +47,7 @@ export function Search(props: { state: AppState }) {
     if (!q.trim()) {
       setResults([])
       setResolution(null)
+      setPasted(null)
       setSearching(false)
       return
     }
@@ -54,15 +57,28 @@ export function Search(props: { state: AppState }) {
         try {
           // A pasted track link is resolved (PLAN §5); anything else is a search.
           if (isLink(q)) {
+            // An album or playlist link shows the collection; any other link is a song.
+            const collection = await call('collection.match', { input: q.trim() })
+            if (collection) {
+              if (id === latest) {
+                collectionState(collection.ref).setDetail(collection)
+                setPasted(collection)
+                setResolution(null)
+                setResults([])
+              }
+              return
+            }
             const found = await call('resolve', { input: q.trim() })
             if (id === latest) {
               setResolution(found)
+              setPasted(null)
               setResults([])
             }
           } else {
             const found = await call('search', { q })
             if (id === latest) {
               setResults(found)
+              setPasted(null)
               setResolution(null)
             }
           }
@@ -133,6 +149,17 @@ export function Search(props: { state: AppState }) {
           />
         )}
       </Show>
+      <Show when={pasted()}>
+        {(c) => (
+          <ul class="list">
+            <CollectionRow
+              collection={c()}
+              state={props.state}
+              enqueueSong={(song, position) => void enqueueYtm(song, position)}
+            />
+          </ul>
+        )}
+      </Show>
       <Show when={mergeInto()}>
         {(into) => (
           <div class="results-bar merge-bar">
@@ -147,7 +174,7 @@ export function Search(props: { state: AppState }) {
         )}
       </Show>
       <Show
-        when={results().length || resolution()}
+        when={results().length || resolution() || pasted()}
         fallback={
           <p class="empty">
             {searching()

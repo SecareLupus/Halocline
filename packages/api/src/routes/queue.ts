@@ -23,8 +23,11 @@ const AddItem = z.object({
 })
 
 const AddCollection = z.object({
-  /** `ytm-album:<browseId>` or `ytm-playlist:<playlistId>`, from search results. */
-  ref: z.string().min(1).max(200),
+  /**
+   * `ytm-album:<browseId>` or `ytm-playlist:<playlistId>` from search results, or a
+   * YouTube Music album or playlist link.
+   */
+  ref: z.string().min(1).max(2000),
   position: QueuePosition.default('end'),
   requestedBy: z.string().max(100).optional(),
 })

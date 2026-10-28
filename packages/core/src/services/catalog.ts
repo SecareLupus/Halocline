@@ -1,7 +1,7 @@
 import { DomainError } from '../errors'
 import { parseCollectionRef, type YtmCatalog } from '../providers/ytm'
 import { candidateSong, type LinkResolver } from '../resolve/resolver'
-import { looksLikeUrl } from '../resolve/links'
+import { looksLikeUrl, parseCollectionLink } from '../resolve/links'
 import type {
   Recording,
   RecordingDetail,
@@ -18,6 +18,10 @@ import type { LibraryService } from './library'
 import type { AddToQueue, QueueService } from './queue'
 
 export type SearchScope = 'library' | 'ytm' | 'all'
+
+/** A collection ref as given, or the one an album or playlist link names. */
+const collectionRef = (input: string) =>
+  parseCollectionRef(input) ? input.trim() : parseCollectionLink(input)
 
 /** Albums and playlists shown per search, of each kind. */
 const COLLECTIONS_PER_KIND = 4
@@ -128,10 +132,14 @@ export class CatalogService {
     return results
   }
 
-  /** A YouTube Music album or playlist with its tracks (`ytm-album:…`, `ytm-playlist:…`). */
-  async collection(ref: string): Promise<YtmCollectionDetail> {
-    if (!parseCollectionRef(ref)) {
-      throw new DomainError('invalid_request', `Not an album or playlist ref: ${ref}`)
+  /**
+   * A YouTube Music album or playlist with its tracks, by ref (`ytm-album:…`,
+   * `ytm-playlist:…`) or by its link.
+   */
+  async collection(refOrLink: string): Promise<YtmCollectionDetail> {
+    const ref = collectionRef(refOrLink)
+    if (!ref) {
+      throw new DomainError('invalid_request', `Not an album or playlist: ${refOrLink}`)
     }
     let found: YtmCollectionDetail | undefined
     try {
@@ -143,15 +151,20 @@ export class CatalogService {
     return found
   }
 
+  /** The album or playlist an input names, or null when it's something else (e.g. a song). */
+  async matchCollection(input: string): Promise<YtmCollectionDetail | null> {
+    return collectionRef(input) ? this.collection(input) : null
+  }
+
   /**
    * Queues a whole album or playlist, in order, as one change. Its songs aren't
    * saved to the library. In stream-safe mode, only those you've tagged are queued.
    */
   async enqueueCollection(
-    ref: string,
+    refOrLink: string,
     options: Omit<AddToQueue, 'recordingId'>,
   ): Promise<{ collection: YtmCollection; items: QueueItem[]; skipped: number }> {
-    const { songs, ...collection } = await this.collection(ref)
+    const { songs, ...collection } = await this.collection(refOrLink)
     const recordingIds = this.library.batched(() =>
       this.library.transaction(() => songs.map((song) => this.library.ensureYtmSong(song).id)),
     )
@@ -170,6 +183,13 @@ export class CatalogService {
     const videoId = parseYtmRef(input)
     if (videoId) return this.ytmRecording(videoId)
     if (looksLikeUrl(input)) {
+      // One queue item can't hold an album; say where it goes instead of "unsupported".
+      if (parseCollectionLink(input)) {
+        throw new DomainError(
+          'invalid_request',
+          'That is an album or playlist link: queue it with POST /v1/queue/collections',
+        )
+      }
       const resolution = await this.links.resolve(input)
       if (resolution.match) return this.materialize(resolution.match)
       throw this.unresolved(resolution.candidates, 'Nothing matched that link')

@@ -51,7 +51,7 @@ export {
   type AudioAnalyzer,
 } from './services/analysis'
 export * from './autoplay/rank'
-export { parseLink, type TrackLink } from './resolve/links'
+export { parseCollectionLink, parseLink, type TrackLink } from './resolve/links'
 export { jaroWinkler, scoreMatch, CONFIDENT, PLAUSIBLE } from './resolve/score'
 export {
   activeAccountName,

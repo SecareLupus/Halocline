@@ -59,6 +59,19 @@ describe('albums and playlists', () => {
     expect(core.queue.list().items).toHaveLength(2)
   })
 
+  it('queues an album by its link', async () => {
+    const { call } = setup()
+    const added = await call('POST', '/v1/queue/collections', {
+      ref: 'https://music.youtube.com/browse/MPREb_discovery',
+      position: 'next',
+    })
+    expect(added.status).toBe(201)
+    expect(core.queue.list().items.map((i) => i.recording.title)).toEqual([
+      'One More Time',
+      'Aerodynamic',
+    ])
+  })
+
   it('rejects refs that are wrong or unknown', async () => {
     const { call } = setup()
     expect((await call('POST', '/v1/queue/collections', { ref: 'ytm:aaaaaaaaaaa' })).status).toBe(
