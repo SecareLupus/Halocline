@@ -340,7 +340,7 @@ the app rather than a CDN, so it works offline under a strict CSP. Reading needs
 | Method & path | Purpose |
 |---|---|
 | `GET /v1/player` | state: track, position, playing, volume, engine, repeat, shuffle |
-| `PATCH /v1/player` | set playing, volume, position, repeat, shuffle |
+| `PATCH /v1/player` | set playing, volume, position, repeat, shuffle. `repeat: all` puts each song, finished or skipped, back on the end of the queue (keeping its requester and pinned source; failed songs aren't, so nothing loops on an error), `one` replays the song, and `shuffle` plays a random queued song next (picked when cued, so gapless preloading still holds). The volume is remembered between runs |
 | `POST /v1/player/next` · `/previous` | transport |
 | `GET /v1/queue` | items + revision |
 | `POST /v1/queue/items` | `{ input: url \| query \| recordingId, position: next \| end \| {after: itemId}, requestedBy? }`. Resolves and enqueues in one call. `201` on success, `409 stream_safe_violation`, `422 match_ambiguous` with candidates |

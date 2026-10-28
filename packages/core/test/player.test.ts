@@ -1,6 +1,16 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { PlayerService, type Core, type PlayerCommand, type Source, type TrackStore } from '../src'
-import { song, testCore } from './helpers'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  createCore,
+  PlayerService,
+  type Core,
+  type PlayerCommand,
+  type Source,
+  type TrackStore,
+} from '../src'
+import { fakeYtm, song, testCore } from './helpers'
 
 let core: Core
 afterEach(() => core.close())
@@ -213,5 +223,71 @@ describe('PlayerService', () => {
     expect(core.player.get().current?.recording.title).toBe('Tagged')
     core.settings.patch({ autoplay: { enabled: false } })
     expect(core.player.get().current?.recording.title).toBe('Tagged')
+  })
+})
+
+describe('shuffle and repeat', () => {
+  const titles = () => core.queue.list().items.map((i) => i.recording.title)
+  const playing = () => core.player.get().current?.recording.title
+
+  it('shuffle plays a random queued song, the same one it cued', () => {
+    const { enqueue, lastCue } = setup()
+    for (const t of ['A', 'B', 'C', 'D']) enqueue(t)
+    core.player.patch({ playing: true })
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.99)
+    core.player.patch({ shuffle: true })
+    // The pick is made when cued and kept, so the preloaded track is the one played.
+    expect(lastCue()?.nowPlaying.recording.title).toBe('D')
+    random.mockReturnValue(0)
+    core.player.next()
+    expect(playing()).toBe('D')
+    expect(titles()).toEqual(['B', 'C'])
+    random.mockRestore()
+  })
+
+  it('repeat puts songs back on the end when finished or skipped, keeping their details', () => {
+    const { enqueue } = setup()
+    const a = enqueue('A')
+    enqueue('B')
+    const pin = core.library.sources(a.recordingId)[0]!.id
+    core.queue.pinSource(a.id, pin)
+    core.player.patch({ repeat: 'all', playing: true })
+    core.player.next() // A skipped
+    expect(playing()).toBe('B')
+    expect(core.queue.list().items).toMatchObject([
+      { recording: { title: 'A' }, pinnedSourceId: pin, origin: 'user' },
+    ])
+    core.player.report({ type: 'ended' }) // B finished
+    expect(playing()).toBe('A')
+    expect(titles()).toEqual(['B'])
+  })
+
+  it('repeat replays a lone song, but never one that fails', () => {
+    const { enqueue } = setup()
+    enqueue('Only')
+    core.player.patch({ repeat: 'all', playing: true })
+    core.player.report({ type: 'ended' })
+    expect(playing()).toBe('Only')
+    expect(titles()).toEqual([])
+
+    core.player.report({ type: 'error', message: 'decode failed' })
+    expect(core.player.get().current).toBeNull()
+    expect(titles()).toEqual([])
+  })
+})
+
+describe('volume', () => {
+  it('is remembered between runs', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'halocline-volume-'))
+    const open = () =>
+      createCore({ dbPath: join(dir, 'db.sqlite'), ytm: fakeYtm(), autoplay: false })
+    const first = open()
+    expect(first.player.get().volume).toBe(0.8)
+    first.player.patch({ volume: 0.35 })
+    await first.close()
+    const second = open()
+    expect(second.player.get().volume).toBe(0.35)
+    await second.close()
+    rmSync(dir, { recursive: true, force: true })
   })
 })

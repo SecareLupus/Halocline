@@ -5,6 +5,7 @@
     "src/main",
     "src/preload/index.ts",
     "src/shared",
-    "../../packages/api/src/env.d.ts"
+    "../../packages/api/src/env.d.ts",
+    "node_modules/electron-vite/node.d.ts"
   ]
 }

@@ -303,6 +303,25 @@ h2 {
   place-items: center;
 }
 
+.transport button.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.transport button.repeat {
+  position: relative;
+}
+
+/* Repeat-one: a small 1 in the corner of the repeat icon. */
+.repeat-one {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .current {
   display: flex;
   flex-direction: column;

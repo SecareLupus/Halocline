@@ -22,6 +22,36 @@ function Icon(props: { name: keyof typeof ICONS }) {
   )
 }
 
+/** Line icons: two crossing arrows (shuffle) and a loop of two arrows (repeat). */
+const LINE_ICONS = {
+  shuffle: 'M3 7h3.5c4 0 5 10 9 10H21M3 17h3.5c4 0 5-10 9-10H21M18 4l3 3-3 3M18 14l3 3-3 3',
+  repeat:
+    'M4 12V9.5A2.5 2.5 0 0 1 6.5 7H20M17 4l3 3-3 3M20 12v2.5a2.5 2.5 0 0 1-2.5 2.5H4M7 20l-3-3 3-3',
+}
+
+function LineIcon(props: { name: keyof typeof LINE_ICONS }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        d={LINE_ICONS[props.name]}
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** Repeat cycles off → all (the queue goes round) → one (this song) → off. */
+const NEXT_REPEAT = { off: 'all', all: 'one', one: 'off' } as const
+const REPEAT_LABEL = {
+  off: 'Repeat is off',
+  all: 'Repeat: played songs go back on the end of the queue',
+  one: 'Repeat this song',
+} as const
+
 const formatTime = (ms: number) => {
   const s = Math.floor(ms / 1000)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -55,6 +85,16 @@ export function NowPlaying(props: { state: AppState }) {
       <div class="transport">
         <button
           type="button"
+          aria-label="Shuffle"
+          aria-pressed={p()?.shuffle ?? false}
+          classList={{ on: p()?.shuffle ?? false }}
+          title={p()?.shuffle ? 'Shuffle is on: next is a random queued song' : 'Shuffle is off'}
+          onClick={() => control(() => call('player.patch', { shuffle: !p()?.shuffle }))}
+        >
+          <LineIcon name="shuffle" />
+        </button>
+        <button
+          type="button"
           aria-label="Previous"
           onClick={() => control(() => call('player.previous'))}
         >
@@ -69,6 +109,21 @@ export function NowPlaying(props: { state: AppState }) {
         </button>
         <button type="button" aria-label="Next" onClick={() => control(() => call('player.next'))}>
           <Icon name="next" />
+        </button>
+        <button
+          type="button"
+          class="repeat"
+          aria-label={REPEAT_LABEL[p()?.repeat ?? 'off']}
+          title={REPEAT_LABEL[p()?.repeat ?? 'off']}
+          classList={{ on: (p()?.repeat ?? 'off') !== 'off' }}
+          onClick={() =>
+            control(() => call('player.patch', { repeat: NEXT_REPEAT[p()?.repeat ?? 'off'] }))
+          }
+        >
+          <LineIcon name="repeat" />
+          <Show when={p()?.repeat === 'one'}>
+            <span class="repeat-one">1</span>
+          </Show>
         </button>
       </div>
       <Show

@@ -194,7 +194,15 @@ export function createCore(options: {
     queue,
     (paths) => scanner.scanPaths(paths),
   )
-  const player = new PlayerService(queue, library, settings, health, ytm, tracks, events)
+  const player = new PlayerService(queue, library, settings, health, ytm, tracks, events, {
+    volume: {
+      get: () => {
+        const saved = Number(getKv(db, 'player_volume'))
+        return getKv(db, 'player_volume') !== undefined && saved >= 0 && saved <= 1 ? saved : null
+      },
+      set: (volume) => setKv(db, 'player_volume', String(volume)),
+    },
+  })
   const analysis = new AnalysisService(db, library, settings, tracks, events)
   const autoplay = new AutoplayService(library, queue, settings, ytm, analysis, events, {
     watch: options.autoplay !== false,

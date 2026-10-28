@@ -21,6 +21,8 @@ export interface AddToQueue {
   position?: QueuePosition
   origin: QueueOrigin
   requestedBy?: string
+  /** Keeps a source pin, e.g. when repeat puts a song back on the queue. */
+  pinnedSourceId?: string
   /** Optimistic concurrency: reject if the queue revision has moved on. */
   expectedRevision?: number
 }
@@ -70,8 +72,9 @@ export class QueueService {
         .run(position)
       this.db
         .prepare(
-          `INSERT INTO queue_items (id, recording_id, origin, requested_by, added_at, position)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO queue_items
+             (id, recording_id, origin, requested_by, added_at, position, pinned_source_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -80,6 +83,7 @@ export class QueueService {
           input.requestedBy ?? null,
           new Date().toISOString(),
           position,
+          input.pinnedSourceId ?? null,
         )
     })
     return this.get(id)

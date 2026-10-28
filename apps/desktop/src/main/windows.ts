@@ -1,5 +1,6 @@
 import { BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
+import icon from '../../build/icon.png?asset'
 
 const preload = join(import.meta.dirname, '../preload/index.cjs')
 
@@ -16,6 +17,8 @@ export function createUiWindow(): BrowserWindow {
     minWidth: 720,
     minHeight: 480,
     title: 'Halocline',
+    // Installers carry the icon themselves; this shows it on Linux taskbars and in dev.
+    icon,
     show: false,
     autoHideMenuBar: true,
     webPreferences: { preload, sandbox: true, contextIsolation: true },

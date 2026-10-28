@@ -280,6 +280,10 @@ export type Queue = z.infer<typeof Queue>
 export const QueuePosition = z.union([z.literal('next'), z.literal('end'), z.object({ after: Id })])
 export type QueuePosition = z.infer<typeof QueuePosition>
 
+/**
+ * `all`: each song, finished or skipped, goes back on the end of the queue, so
+ * the queue cycles (a lone song replays). `one`: the current song replays.
+ */
 export const RepeatMode = z.enum(['off', 'one', 'all'])
 export type RepeatMode = z.infer<typeof RepeatMode>
 
@@ -298,6 +302,7 @@ export const PlayerState = z.object({
   positionAt: z.number().int(),
   volume: z.number().min(0).max(1),
   repeat: RepeatMode,
+  /** The next song is a random one from the queue rather than the first. */
   shuffle: z.boolean(),
   /** True while the fallback engine is playing an ad; never shown as the track. */
   ad: z.boolean(),

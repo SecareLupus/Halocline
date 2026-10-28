@@ -27,6 +27,10 @@ export function registerPlayer(app: OpenAPIHono<ApiEnv>, core: Core) {
       path: '/v1/player',
       tags: ['player'],
       summary: 'Set playing, volume, position, repeat or shuffle',
+      description:
+        '`repeat: "all"` puts each song back on the end of the queue when it finishes or is ' +
+        'skipped, keeping its requester; `"one"` replays the current song. `shuffle` plays a ' +
+        'random queued song next. The volume is remembered between runs.',
       middleware: [requireScope('player:control')],
       request: {
         body: { content: { 'application/json': { schema: PlayerPatch } }, required: true },

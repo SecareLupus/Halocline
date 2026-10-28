@@ -72,6 +72,10 @@ export class PlayerService {
   private send: (command: PlayerCommand) => void = () => {}
   /** Set while this service changes the queue itself, so it doesn't re-cue mid-change. */
   private busy = false
+  /** On shuffle, the queue item picked to play next; kept so the cued track is the one played. */
+  private shufflePick: string | null = null
+  private readonly now: () => number
+  private readonly random: () => number
 
   constructor(
     private readonly queue: QueueService,
@@ -81,13 +85,21 @@ export class PlayerService {
     private readonly ytm: YtmCatalog,
     private readonly tracks: TrackStore | null,
     private readonly events: EventBus,
-    private readonly now: () => number = Date.now,
+    private readonly options: {
+      now?: () => number
+      /** For shuffle; tests pass a fixed one. */
+      random?: () => number
+      /** Where the volume is kept between runs. */
+      volume?: { get(): number | null; set(volume: number): void }
+    } = {},
   ) {
+    this.now = options.now ?? Date.now
+    this.random = options.random ?? (() => Math.random())
     this.state = {
       playing: false,
       positionMs: 0,
-      positionAt: now(),
-      volume: 0.8,
+      positionAt: this.now(),
+      volume: options.volume?.get() ?? 0.8,
       repeat: 'off',
       shuffle: false,
       ad: false,
@@ -117,26 +129,84 @@ export class PlayerService {
   }
 
   patch(patch: PlayerPatch): PlayerState {
-    if (patch.volume !== undefined) this.send({ type: 'volume', volume: patch.volume })
+    if (patch.volume !== undefined) {
+      this.send({ type: 'volume', volume: patch.volume })
+      this.options.volume?.set(patch.volume)
+    }
     if (patch.positionMs !== undefined) this.send({ type: 'seek', positionMs: patch.positionMs })
-    if (patch.playing === true && !this.current) return this.next()
-    if (patch.playing !== undefined) this.send({ type: patch.playing ? 'play' : 'pause' })
-    // Shuffle is stored but not applied until autoplay and queue ordering land.
     const { playing, positionMs, ...rest } = patch
+    if (patch.shuffle !== undefined) this.shufflePick = null
+    // Pressing play with nothing loaded starts the queue, with the other changes
+    // (repeat, shuffle, volume) already in place.
+    if (playing === true && !this.current) {
+      if (Object.keys(rest).length) this.update(rest)
+      return this.next()
+    }
+    if (playing !== undefined) this.send({ type: playing ? 'play' : 'pause' })
     this.update({
       ...rest,
       ...(playing !== undefined && { playing }),
       ...(positionMs !== undefined && { positionMs, positionAt: this.now() }),
     })
-    if (patch.repeat !== undefined) this.recue()
+    if (patch.repeat !== undefined || patch.shuffle !== undefined) this.recue()
     return this.state
   }
 
   next(): PlayerState {
-    this.remember(this.current)
-    const item = this.withQueue(() => this.queue.takeNext())
+    return this.skip(true)
+  }
+
+  /**
+   * Moves on to the next song: the queue's first, or a random one on shuffle. On
+   * repeat, the song left goes back on the end, unless it failed (it would loop).
+   */
+  private skip(requeue: boolean): PlayerState {
+    const done = this.current
+    this.remember(done)
+    let item = this.upNext()
+    if (requeue) this.requeue(done)
+    // With nothing else queued, repeat plays the song just put back.
+    item ??= this.upNext()
     if (!item) return this.stop()
-    return this.start(item)
+    const picked = item
+    this.withQueue(() => this.queue.remove(picked.id))
+    this.shufflePick = null
+    return this.start(picked)
+  }
+
+  /** What plays next: the head of the queue, or on shuffle a random song, picked once. */
+  private upNext(): QueueItem | undefined {
+    if (!this.state.shuffle) return this.queue.peek()
+    const items = this.queue.list().items
+    const kept = items.find((i) => i.id === this.shufflePick)
+    if (kept) return kept
+    const pick = items[Math.floor(this.random() * items.length)]
+    this.shufflePick = pick?.id ?? null
+    return pick
+  }
+
+  /**
+   * Repeat (all): a song that played goes back on the end of the queue when it's
+   * done with, finished or skipped, keeping its requester and pinned source.
+   */
+  private requeue(item: QueueItem | null): void {
+    if (!item || this.state.repeat !== 'all') return
+    // Only a song that actually played: an unplayable one would loop forever.
+    if (this.state.current?.queueItemId !== item.id) return
+    try {
+      this.withQueue(() =>
+        this.queue.add({
+          recordingId: item.recordingId,
+          position: 'end',
+          origin: item.origin,
+          ...(item.requestedBy && { requestedBy: item.requestedBy }),
+          ...(item.pinnedSourceId && { pinnedSourceId: item.pinnedSourceId }),
+        }),
+      )
+    } catch (err) {
+      // Stream-safe mode came on and it isn't tagged: it doesn't come round again.
+      if (!(err instanceof DomainError && err.type === 'stream_safe_violation')) throw err
+    }
   }
 
   previous(): PlayerState {
@@ -187,7 +257,7 @@ export class PlayerService {
     if (!load) {
       // Nothing playable for this one; move on rather than stall the stream.
       this.current = item
-      return this.next()
+      return this.skip(false)
     }
     if (load.engine === 'fallback') this.health.fallbackUsed()
     this.current = item
@@ -227,18 +297,16 @@ export class PlayerService {
     const repeatingOne = finished?.id === cue.item.id
     if (finished && !repeatingOne) {
       this.remember(finished)
+      this.requeue(finished)
       this.withQueue(() => {
-        if (this.state.repeat === 'all') {
-          const { recordingId, origin } = finished
-          this.queue.add({ recordingId, position: 'end', origin })
-        }
-        // It was the queue head when cued; it may have been removed since.
+        // It was the next song when cued; it may have been removed since.
         try {
           this.queue.remove(cue.item.id)
         } catch (err) {
           if (!(err instanceof DomainError && err.type === 'not_found')) throw err
         }
       })
+      this.shufflePick = null
     }
     this.current = cue.item
     this.update(
@@ -260,10 +328,6 @@ export class PlayerService {
       this.start(item)
       return
     }
-    if (item && this.state.repeat === 'all') {
-      const { recordingId, origin } = item
-      this.withQueue(() => this.queue.add({ recordingId, position: 'end', origin }))
-    }
     this.next()
   }
 
@@ -276,18 +340,18 @@ export class PlayerService {
       this.start(item, this.positionNow(), true)
       return
     }
-    this.next()
+    this.skip(false)
   }
 
   /**
    * Tells the player what comes next so it can preload it: the current track
-   * again on repeat-one, otherwise the head of the queue. The fallback engine
+   * again on repeat-one, otherwise the next song (the queue's first, or the shuffle pick). The fallback engine
    * can't preload, so tracks headed there aren't cued. A cloud track cued for
    * the direct engine is prefetched to the cache (PLAN §4).
    */
   private recue(): void {
     if (!this.current) return
-    const next = this.state.repeat === 'one' ? this.current : this.queue.peek()
+    const next = this.state.repeat === 'one' ? this.current : this.upNext()
     const load = next && this.allowed(next) ? this.prepare(next) : undefined
     const usable = next && load && load.engine !== 'fallback' ? { item: next, load } : null
     if (usable?.load.engine === 'direct') {

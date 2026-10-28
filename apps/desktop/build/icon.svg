@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Halocline: the layer where fresh water (light, above) meets salt water (deep, below). -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16202c"/>
+      <stop offset="1" stop-color="#0d131b"/>
+    </linearGradient>
+    <linearGradient id="fresh" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9fe3ee"/>
+      <stop offset="1" stop-color="#4fb3c6"/>
+    </linearGradient>
+    <linearGradient id="salt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f7a8c"/>
+      <stop offset="1" stop-color="#123f5c"/>
+    </linearGradient>
+    <clipPath id="disc"><circle cx="512" cy="512" r="300"/></clipPath>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#bg)"/>
+  <!-- The halo -->
+  <circle cx="512" cy="512" r="356" fill="none" stroke="#4fb3c6" stroke-opacity="0.35" stroke-width="20"/>
+  <g clip-path="url(#disc)">
+    <rect x="200" y="200" width="624" height="624" fill="url(#salt)"/>
+    <!-- Fresh water above a gentle wave: the halocline -->
+    <path d="M200 200H824V520C752 470 680 470 608 520S464 570 392 520 248 470 200 500Z" fill="url(#fresh)"/>
+    <path d="M200 500C248 470 320 470 392 520S536 570 608 520 752 470 824 520" fill="none" stroke="#e8fbff" stroke-width="22" stroke-linecap="round"/>
+  </g>
+</svg>
