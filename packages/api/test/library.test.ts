@@ -149,6 +149,30 @@ describe('merge and split routes', () => {
   })
 })
 
+describe('history', () => {
+  it('lists plays latest first and lets admin clear them', async () => {
+    const a = song('First')
+    const b = song('Second')
+    core.library.markPlayed(a.id, new Date(Date.UTC(2026, 9, 28, 12, 0)))
+    core.library.markPlayed(b.id, new Date(Date.UTC(2026, 9, 28, 12, 5)))
+    const page = await call('GET', '/v1/history?limit=1', tokenFor(['read']))
+    expect(page.json).toMatchObject({ items: [{ recording: { title: 'Second' } }] })
+    const older = await call(
+      'GET',
+      `/v1/history?before=${page.json.nextCursor}`,
+      tokenFor(['read']),
+    )
+    expect(older.json).toMatchObject({
+      items: [{ recording: { title: 'First' } }],
+      nextCursor: null,
+    })
+
+    expect((await call('DELETE', '/v1/history', tokenFor(['read']))).res.status).toBe(403)
+    expect((await call('DELETE', '/v1/history', tokenFor(['admin']))).res.status).toBe(204)
+    expect((await call('GET', '/v1/history', tokenFor(['read']))).json.items).toEqual([])
+  })
+})
+
 describe('rate limits', () => {
   it('allows a burst up to the limit, then 429s with Retry-After', async () => {
     const token = tokenFor(['read'], 3)

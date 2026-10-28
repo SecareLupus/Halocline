@@ -434,6 +434,27 @@ export const AnalysisStatus = z.object({
 })
 export type AnalysisStatus = z.infer<typeof AnalysisStatus>
 
+/** One play: a track starting, with how it got there. */
+export const HistoryEntry = z.object({
+  id: z.number().int(),
+  playedAt: z.iso.datetime(),
+  /** What it played from; null for plays from before history was kept. */
+  engine: Engine.nullable(),
+  /** How it was queued: by you, over the API, or by autoplay. */
+  origin: z.enum(['user', 'api', 'autoplay']).nullable(),
+  requestedBy: z.string().nullable(),
+  recording: Recording,
+})
+export type HistoryEntry = z.infer<typeof HistoryEntry>
+
+export const HistoryPage = z.object({
+  /** Latest first. */
+  items: z.array(HistoryEntry),
+  /** Pass as `before` for the next (older) page; null at the end. */
+  nextCursor: z.string().nullable(),
+})
+export type HistoryPage = z.infer<typeof HistoryPage>
+
 export const HealthStatus = z.enum(['green', 'amber', 'red'])
 export type HealthStatus = z.infer<typeof HealthStatus>
 

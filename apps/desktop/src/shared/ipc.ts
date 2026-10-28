@@ -6,6 +6,7 @@ import type {
   AudioFeatures,
   BulkResult,
   Health,
+  HistoryPage,
   OutputState,
   PlayerCommand,
   PlayerPatch,
@@ -70,6 +71,10 @@ export interface IpcHandlers {
   'ytm.signOut': () => void
   'library.edit': (args: { id: string; changes: RecordingPatch }) => Recording
   'library.editMany': (args: { ids: string[]; changes: RecordingPatch }) => BulkResult
+  /** Recently played, latest first; `before` pages back. */
+  'history.list': (args: { before?: string }) => HistoryPage
+  /** Empties the history (play counts stay). */
+  'history.clear': () => void
   /** Merges duplicates of the same song into `id` (PLAN §3). */
   'library.merge': (args: { id: string; from: string[] }) => RecordingDetail
   /** Moves sources that aren't this song onto a new recording (PLAN §3). */

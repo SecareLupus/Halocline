@@ -93,6 +93,11 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
       const { ids, changes } = BulkRecordingPatch.parse(a)
       return core.library.editMany(ids, changes)
     },
+    'history.list': (a) => {
+      const { before } = z.object({ before: z.string().max(40).optional() }).parse(a ?? {})
+      return core.library.history({ limit: 50, ...(before && { before }) })
+    },
+    'history.clear': () => core.library.clearHistory(),
     'library.merge': (a) => {
       const { id, from } = z.object({ id: Id }).extend(MergeRecordings.shape).parse(a)
       return core.catalog.merge(id, from)

@@ -120,4 +120,20 @@ export const migrations: string[] = [
   ALTER TABLE features ADD COLUMN analyzed_at TEXT;
   ALTER TABLE features ADD COLUMN error TEXT;
   `,
+  /* sql */ `
+  -- Play history (the History page): one row per track start. Seeded with each
+  -- recording's last play, so the page doesn't start empty.
+  CREATE TABLE plays (
+    id           INTEGER PRIMARY KEY,
+    recording_id TEXT NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    played_at    TEXT NOT NULL,
+    engine       TEXT,
+    origin       TEXT,
+    requested_by TEXT
+  );
+  CREATE INDEX plays_played_at ON plays(played_at);
+  INSERT INTO plays (recording_id, played_at)
+    SELECT id, last_played_at FROM recordings WHERE last_played_at IS NOT NULL
+    ORDER BY last_played_at;
+  `,
 ]

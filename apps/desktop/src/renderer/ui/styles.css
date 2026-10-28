@@ -94,8 +94,53 @@ input:not([type]) {
   overflow-y: auto;
 }
 
-.pane + .pane {
+.pane + .pane,
+.panes > .pane:last-child:not(:first-child) {
   border-left: 1px solid var(--border);
+}
+
+/* Keeps the search pane mounted (query and results) while History is shown. */
+.pane-slot {
+  display: contents;
+}
+
+.pane-slot.hidden {
+  display: none;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.history h3.day {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 12px 0 4px;
+}
+
+.played-at {
+  flex: none;
+  min-width: 5.2em;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Time, then the song right after it; the buttons go to the far end. */
+.history .list li {
+  justify-content: flex-start;
+}
+
+.history .list li .actions {
+  margin-left: auto;
+}
+
+button.quiet {
+  font-size: 12px;
+  padding: 2px 8px;
 }
 
 .settings {

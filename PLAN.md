@@ -145,6 +145,12 @@ Phase 3 as built:
       original are dropped.
     - At least one source stays on the original.
 
+- **History** (the History button beside Settings): a `plays` table gets a row per track start,
+  with the engine, the queue origin and the requester. The migration seeded it with each
+  recording's last play. Merges carry plays over. The page groups plays by day, pages back 50 at a
+  time, offers Next, Add, Save and stream-safe on each, and can be cleared (play counts stay, since
+  autoplay uses them). The search pane stays mounted underneath, so its results survive.
+
 Storage:
 - SQLite (`better-sqlite3`) with FTS5 over title, artist and album.
 - Vector similarity via `sqlite-vec`, or brute-force cosine search in memory, which is fine at 10k
@@ -345,6 +351,7 @@ the app rather than a CDN, so it works offline under a strict CSP. Reading needs
 | `POST /v1/resolve` | link to a match or candidates, without enqueueing |
 | `GET /v1/library/recordings` · `PATCH /v1/library/recordings/{id}` | browse; add or remove from library; set `stream_safe` and tags (with a bulk variant) |
 | `GET /v1/analysis` | audio analysis progress (§7) |
+| `GET /v1/history?limit=&before=` · `DELETE /v1/history` | recently played, latest first: when, engine, and how it was queued (`user`/`api`/`autoplay`, `requestedBy`); clear it (admin; play counts stay) |
 | `POST /v1/library/recordings/{id}/merge` · `/split` | merge duplicates into this recording; split sources off onto a new one (§3) |
 | `GET /v1/artwork/{recordingId}?size=` | album art: art embedded in local files is extracted at scan time, YTM thumbnails are proxied and resized. Cached either way |
 | `GET /v1/health` | engine status, last errors, scan progress |
@@ -671,9 +678,6 @@ Each attaches through the §8 extension points.
 4. **Visualizer widget:** needs frequency data streamed from Halocline over WebSocket.
 
 **Other:**
-- A **History** (recently played) page: what played and when, with the engine and who requested
-  it, and quick actions (play again, save to library, tag stream-safe). Needs a plays table:
-  today only `play_count` and `last_played_at` are kept per recording.
 - Twitch chat song requests (`!sr <link|query>`): built on a `queue:add`-scoped token, with
   per-user limits, mod approval, vote-to-skip, and stream-safe enforcement.
 - More providers: SoundCloud, Bandcamp, Subsonic/Navidrome, Tidal, Deezer.

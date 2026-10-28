@@ -1,6 +1,7 @@
 import {
   BulkRecordingPatch,
   BulkResult,
+  HistoryPage,
   Id,
   LibraryPage,
   LibrarySort,
@@ -38,6 +39,12 @@ const RecordingParams = z.object({ id: Id })
 const SaveRequest = z.object({
   /** A recording ID, a `ytm:<videoId>` ref, or a music.youtube.com link. */
   input: z.string().min(1).max(2000),
+})
+
+const HistoryQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  /** `nextCursor` from the previous page. */
+  before: z.string().max(40).optional(),
 })
 
 const ScanRequest = z.object({
@@ -227,6 +234,46 @@ export function registerLibrary(app: OpenAPIHono<ApiEnv>, core: Core) {
     }),
     async (c) =>
       c.json(await core.catalog.split(c.req.valid('param').id, c.req.valid('json').sourceIds), 201),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/history',
+      tags: ['library'],
+      summary: 'Recently played, latest first',
+      description:
+        'One entry per track start: when, the engine it played from, and how it was queued ' +
+        '(`user`, `api` or `autoplay`, with `requestedBy`). Plays from before history was kept ' +
+        'have no engine or origin. Page with `before`.',
+      middleware: [requireScope('read')],
+      request: { query: HistoryQuery },
+      responses: {
+        200: {
+          description: 'A page of plays',
+          content: { 'application/json': { schema: HistoryPage } },
+        },
+        ...authErrors,
+        400: errorResponse('Bad cursor'),
+      },
+    }),
+    (c) => c.json(core.library.history(c.req.valid('query')), 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/v1/history',
+      tags: ['library'],
+      summary: 'Clear the play history',
+      description: 'Empties the list. Play counts and last-played times stay; autoplay uses them.',
+      middleware: [requireScope('admin')],
+      responses: { 204: { description: 'Cleared' }, ...authErrors },
+    }),
+    (c) => {
+      core.library.clearHistory()
+      return c.body(null, 204)
+    },
   )
 
   app.openapi(

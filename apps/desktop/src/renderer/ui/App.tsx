@@ -1,4 +1,5 @@
 import { createSignal, Show } from 'solid-js'
+import { History } from './History'
 import { NowPlaying } from './NowPlaying'
 import { QueueList } from './QueueList'
 import { Search } from './Search'
@@ -8,6 +9,8 @@ import { createAppState } from './store'
 export function App() {
   const state = createAppState()
   const [showSettings, setShowSettings] = createSignal(false)
+  /** The left pane: search, or the play history. The queue stays on the right. */
+  const [showHistory, setShowHistory] = createSignal(false)
 
   const healthLabel = () => {
     const h = state.health()
@@ -30,13 +33,31 @@ export function App() {
     <div class="app">
       <header class="topbar">
         <h1>Halocline</h1>
-        <button type="button" onClick={() => setShowSettings((v) => !v)}>
-          {showSettings() ? 'Close settings' : 'Settings'}
-        </button>
+        <nav class="topbar-actions">
+          <button
+            type="button"
+            aria-pressed={showHistory() && !showSettings()}
+            onClick={() => {
+              setShowSettings(false)
+              setShowHistory((v) => !v)
+            }}
+          >
+            {showHistory() && !showSettings() ? 'Search' : 'History'}
+          </button>
+          <button type="button" onClick={() => setShowSettings((v) => !v)}>
+            {showSettings() ? 'Close settings' : 'Settings'}
+          </button>
+        </nav>
       </header>
       <main class="panes">
         <Show when={!showSettings()} fallback={<SettingsPanel state={state} />}>
-          <Search state={state} />
+          {/* Search stays mounted under History, so its query and results survive. */}
+          <div class="pane-slot" classList={{ hidden: showHistory() }}>
+            <Search state={state} />
+          </div>
+          <Show when={showHistory()}>
+            <History state={state} />
+          </Show>
           <QueueList state={state} />
         </Show>
       </main>

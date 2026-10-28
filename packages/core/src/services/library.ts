@@ -11,9 +11,12 @@ import {
   NewSource,
   RecordingPatch,
   type BulkResult,
+  type Engine,
+  type HistoryPage,
   type LibraryEntry,
   type LibraryPage,
   type LibrarySort,
+  type QueueOrigin,
   type Recording,
   type RecordingDetail,
   type Source,
@@ -321,13 +324,72 @@ export class LibraryService {
    * Counts a play when a track starts. Not announced as `library.changed`: play
    * counts change every song and nothing on screen shows them.
    */
-  markPlayed(id: string, at = new Date()): void {
-    this.db
+  markPlayed(
+    id: string,
+    at = new Date(),
+    how: { engine?: Engine; origin?: QueueOrigin; requestedBy?: string | null } = {},
+  ): void {
+    const recording = this.get(id)
+    if (!recording) return
+    this.transaction(() => {
+      this.db
+        .prepare(
+          'UPDATE recordings SET play_count = play_count + 1, last_played_at = ? WHERE id = ?',
+        )
+        .run(at.toISOString(), recording.id)
+      this.db
+        .prepare(
+          `INSERT INTO plays (recording_id, played_at, engine, origin, requested_by)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          recording.id,
+          at.toISOString(),
+          how.engine ?? null,
+          how.origin ?? null,
+          how.requestedBy ?? null,
+        )
+    })
+  }
+
+  /** Plays, latest first, a page at a time (`before` is the previous page's cursor). */
+  history(options: { limit?: number; before?: string } = {}): HistoryPage {
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200)
+    const before = options.before === undefined ? null : Number(options.before)
+    if (before !== null && !Number.isInteger(before)) {
+      throw new DomainError('invalid_request', 'The cursor is invalid')
+    }
+    const rows = this.db
       .prepare(
-        `UPDATE recordings SET play_count = play_count + 1, last_played_at = ?
-         WHERE id = ${CANONICAL_ID}`,
+        `SELECT p.id AS play_id, p.played_at, p.engine, p.origin, p.requested_by, r.*
+         FROM plays p JOIN recordings r ON r.id = p.recording_id
+         ${before === null ? '' : 'WHERE p.id < ?'}
+         ORDER BY p.id DESC LIMIT ?`,
       )
-      .run(at.toISOString(), id, id)
+      .all(...(before === null ? [] : [before]), limit + 1) as (RecordingRow & {
+      play_id: number
+      played_at: string
+      engine: Engine | null
+      origin: QueueOrigin | null
+      requested_by: string | null
+    })[]
+    const page = rows.slice(0, limit)
+    return {
+      items: page.map((row) => ({
+        id: row.play_id,
+        playedAt: row.played_at,
+        engine: row.engine,
+        origin: row.origin,
+        requestedBy: row.requested_by,
+        recording: toRecording(row),
+      })),
+      nextCursor: rows.length > limit ? String(page.at(-1)!.play_id) : null,
+    }
+  }
+
+  /** Empties the history list. Play counts and last-played times stay (autoplay uses them). */
+  clearHistory(): void {
+    this.db.prepare('DELETE FROM plays').run()
   }
 
   /** The most recently played recordings, latest first. */
@@ -608,6 +670,9 @@ export class LibraryService {
         )
       this.db
         .prepare(`UPDATE sources SET recording_id = ? WHERE recording_id IN (${marks})`)
+        .run(into.id, ...ids)
+      this.db
+        .prepare(`UPDATE plays SET recording_id = ? WHERE recording_id IN (${marks})`)
         .run(into.id, ...ids)
       // The kept recording's analysis wins; one only a merged recording had moves over.
       this.db
