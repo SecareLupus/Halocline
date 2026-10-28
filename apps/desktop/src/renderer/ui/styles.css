@@ -4,11 +4,14 @@
   --border: #dde1e7;
   --text: #1b1f24;
   --muted: #65707d;
-  --accent: #1f7a8c;
+  /* Seafoam, from the app icon; darker in light mode to keep contrast on white. */
+  --accent: #1a7a57;
   --green: #2e9e5b;
   --amber: #d99a1e;
   --red: #cf3a3a;
   color-scheme: light dark;
+  /* Native controls (sliders, checkboxes) in the accent too. */
+  accent-color: var(--accent);
   font-family: system-ui, sans-serif;
   font-size: 14px;
 }
@@ -20,7 +23,7 @@
     --border: #2c323a;
     --text: #e6e9ed;
     --muted: #8d97a3;
-    --accent: #4fb3c6;
+    --accent: #5ccf9e;
   }
 }
 
@@ -32,6 +35,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+}
+
+a {
+  color: var(--accent);
 }
 
 button {
@@ -505,6 +512,6 @@ h2 {
 }
 
 .list li.best {
-  background: color-mix(in srgb, var(--accent, #4fb3d9) 10%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   border-radius: 6px;
 }
