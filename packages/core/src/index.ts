@@ -10,6 +10,7 @@ import { YtmStreamer } from './providers/ytm-stream'
 import { TrackCache } from './stream/track-cache'
 import { CatalogService } from './services/catalog'
 import { LinkResolver } from './resolve/resolver'
+import { AutoplayService } from './services/autoplay'
 import { PlayerService } from './services/player'
 import { LibraryScanner, type ScannerOptions } from './services/scanner'
 import { QueueService } from './services/queue'
@@ -30,6 +31,8 @@ export {
 export { LibraryScanner, type ScannerOptions } from './services/scanner'
 export { CatalogService, parseYtmRef, type SearchScope } from './services/catalog'
 export { LinkResolver } from './resolve/resolver'
+export { AutoplayService } from './services/autoplay'
+export * from './autoplay/rank'
 export { parseLink, type TrackLink } from './resolve/links'
 export { jaroWinkler, scoreMatch, CONFIDENT, PLAUSIBLE } from './resolve/score'
 export {
@@ -77,6 +80,7 @@ export interface Core {
   scanner: LibraryScanner
   ytm: YtmCatalog
   catalog: CatalogService
+  autoplay: AutoplayService
   /** The direct YTM engine and its track cache, when a page runtime was given. */
   streamer: YtmStreamer | null
   tracks: TrackCache | null
@@ -94,6 +98,11 @@ export function createCore(options: {
   scanner?: Partial<ScannerOptions>
   /** A YTM catalog to use instead of the real provider (tests), or options for it. */
   ytm?: YtmCatalog | YtmProviderOptions
+  /**
+   * Randomness and clock for autoplay's picks; tests pass fixed ones. `false`
+   * stops it reacting to queue changes by itself (tests of other things).
+   */
+  autoplay?: false | { random?: () => number; now?: () => number }
   /** For the link resolver's metadata lookups; tests pass a fake. */
   fetch?: typeof globalThis.fetch
   /** Enables direct YTM playback (PLAN §4). The app shell supplies the page runtime. */
@@ -145,6 +154,10 @@ export function createCore(options: {
     (paths) => scanner.scanPaths(paths),
   )
   const player = new PlayerService(queue, library, settings, health, ytm, tracks, events)
+  const autoplay = new AutoplayService(library, queue, settings, ytm, events, {
+    watch: options.autoplay !== false,
+    ...options.autoplay,
+  })
   const tokens = new TokenService(db)
   return {
     db,
@@ -158,10 +171,12 @@ export function createCore(options: {
     scanner,
     ytm,
     catalog,
+    autoplay,
     streamer,
     tracks,
     artworkDir: scannerOptions.artworkDir,
     close: async () => {
+      autoplay.stop()
       await scanner.stop()
       await tracks?.close()
       db.close()

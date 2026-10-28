@@ -12,6 +12,7 @@ export function testCore(options: { ytmPlayback?: boolean } = {}): Core {
   return createCore({
     dbPath: ':memory:',
     ytm: fakeYtm([], { playback: options.ytmPlayback ?? false }),
+    autoplay: false,
   })
 }
 
@@ -22,7 +23,7 @@ export function song(core: Core, title: string, extra: Partial<NewRecording> = {
 /** An offline YTM catalog with a fixed song list. */
 export function fakeYtm(
   songs: YtmSong[] = [],
-  options: { playback?: boolean; down?: boolean } = {},
+  options: { playback?: boolean; down?: boolean; radio?: Record<string, YtmSong[]> } = {},
 ): YtmCatalog {
   const status: YtmStatus = {
     signedIn: false,
@@ -38,6 +39,10 @@ export function fakeYtm(
       return songs.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()))
     },
     getSong: async (id) => songs.find((s) => s.videoId === id),
+    getRadio: async (id) => {
+      if (options.down) throw new Error('offline')
+      return options.radio?.[id] ?? []
+    },
   }
 }
 

@@ -298,6 +298,56 @@ export class LibraryService {
     return recording
   }
 
+  /**
+   * Counts a play when a track starts. Not announced as `library.changed`: play
+   * counts change every song and nothing on screen shows them.
+   */
+  markPlayed(id: string, at = new Date()): void {
+    this.db
+      .prepare(
+        `UPDATE recordings SET play_count = play_count + 1, last_played_at = ?
+         WHERE id = ${CANONICAL_ID}`,
+      )
+      .run(at.toISOString(), id, id)
+  }
+
+  /** The most recently played recordings, latest first. */
+  recentlyPlayed(limit: number): Recording[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM recordings WHERE last_played_at IS NOT NULL
+         ORDER BY last_played_at DESC LIMIT ?`,
+      )
+      .all(limit) as RecordingRow[]
+    return rows.map(toRecording)
+  }
+
+  /** Library recordings matching a filter, for autoplay's library candidates. */
+  libraryWhere(filter: {
+    artists?: string[]
+    tags?: string[]
+    streamSafe?: boolean
+    limit: number
+  }): Recording[] {
+    const where = ['in_library = 1']
+    const params: unknown[] = []
+    if (filter.streamSafe) where.push('stream_safe = 1')
+    const any: string[] = []
+    for (const artist of filter.artists ?? []) {
+      any.push('EXISTS (SELECT 1 FROM json_each(artists) WHERE value = ? COLLATE NOCASE)')
+      params.push(artist)
+    }
+    for (const tag of filter.tags ?? []) {
+      any.push('EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ? COLLATE NOCASE)')
+      params.push(tag)
+    }
+    if (any.length) where.push(`(${any.join(' OR ')})`)
+    const rows = this.db
+      .prepare(`SELECT * FROM recordings WHERE ${where.join(' AND ')} ORDER BY random() LIMIT ?`)
+      .all(...params, filter.limit) as RecordingRow[]
+    return rows.map(toRecording)
+  }
+
   /** Full-text search of the library (title, artists, album), best matches first. */
   search(text: string, limit = 25): Recording[] {
     const query = toFtsQuery(text)

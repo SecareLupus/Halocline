@@ -351,6 +351,8 @@ export class PlayerService {
 
   private update(changes: Partial<PlayerState>, trackChanged = false): void {
     this.state = { ...this.state, ...changes }
+    // Play history feeds autoplay (PLAN §7): recent artists and songs aren't repeated.
+    if (trackChanged && this.current) this.library.markPlayed(this.current.recordingId)
     this.events.publish({
       type: trackChanged ? 'track.changed' : 'player.changed',
       data: this.state,

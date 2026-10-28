@@ -299,7 +299,16 @@ export const Settings = z.object({
   autoplay: z
     .object({
       enabled: z.boolean().default(true),
+      /** Songs are added while the queue is shorter than this (PLAN §7). */
       minQueueLength: z.number().int().min(0).max(50).default(2),
+      /** `all` adds YouTube Music songs too; `library` only what you've saved or own. */
+      sources: z.enum(['all', 'library']).default('all'),
+      /** 0 takes the closest match; 1 picks freely among many good ones. */
+      adventurousness: z.number().min(0).max(1).default(0.3),
+      /** No artist again within this many songs. */
+      artistGap: z.number().int().min(0).max(20).default(3),
+      /** Nothing played in the last this-many hours. */
+      recentHours: z.number().min(0).max(168).default(3),
     })
     .prefault({}),
   api: z

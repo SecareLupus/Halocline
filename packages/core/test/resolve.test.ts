@@ -67,6 +67,7 @@ function ytm(songs: YtmSong[], videos: YtmSong[] = []): YtmCatalog {
     refresh: async () => {},
     searchSongs: async () => songs,
     getSong: async (id) => [...songs, ...videos].find((s) => s.videoId === id),
+    getRadio: async () => [],
   }
 }
 

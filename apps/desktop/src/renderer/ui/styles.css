@@ -327,6 +327,10 @@ h2 {
   width: 44px;
 }
 
+.field input[type='number'] {
+  width: 80px;
+}
+
 .field .value {
   color: var(--muted);
   font-variant-numeric: tabular-nums;

@@ -7,7 +7,7 @@ let core: Core
 let app: ReturnType<typeof createApi>
 
 beforeEach(() => {
-  core = createCore({ dbPath: ':memory:', ytm: offlineYtm })
+  core = createCore({ dbPath: ':memory:', ytm: offlineYtm, autoplay: false })
   app = createApi(core)
 })
 afterEach(() => core.close())

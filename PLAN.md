@@ -409,6 +409,35 @@ Each source of evidence carries a confidence weight, so analyzed and unanalyzed 
 on one scale. Once a track is played or prefetched, it's analyzed, and later rankings use its real
 features.
 
+Phase 5, first part, as built (`services/autoplay.ts`, `autoplay/rank.ts`): autoplay without
+audio analysis, scored as "tracks without features" above.
+- **When:** on queue, track and settings changes, while autoplay is on and the queue is shorter
+  than "Keep queued". The song playing is the seed: plays are now counted when a track starts
+  (`play_count`, `last_played_at`), which also gives the recent-artist and recent-song history.
+- **Candidates:**
+  - YTM's radio (up-next with automix) for the seed, through its YTM source or a search for it.
+    Radio songs already in the database count as those recordings, so in library-only or
+    stream-safe mode the radio still ranks your own songs.
+  - Library songs by the seed's or recent artists, or sharing its tags, plus a random handful so
+    autoplay never runs dry.
+- **Score:** the weighted mean of the evidence a candidate has. YTM radio position counts 1,
+  artist overlap 0.5 (1 for the current artist, 0.6 for a recent one), tag overlap 0.4. Saved or
+  owned songs get +0.05.
+- **Limits:**
+  - Hard: stream-safe mode, not queued already, not the song playing. Cloud songs need the "Library
+    and YouTube Music" setting, stream-safe mode off and a playback engine.
+  - Soft, given up in this order if nothing is left: the artist gap (default 3 songs), then
+    the recent-song window (default 3 hours).
+- **Pick:** from the top 2–20 (by adventurousness), with odds flattening as adventurousness
+  rises.
+- **Settings:** on/off, songs to keep queued, sources, adventurousness, artist gap, recent hours.
+  They're part of `GET`/`PATCH /v1/settings`, and Settings → Autoplay in the UI.
+- **Not built yet:** audio analysis, the features store and the audio terms of the score (tempo,
+  Camelot key, energy, embeddings). Two findings reopen the analysis design above:
+  - Essentia's Python packages are published for Linux and macOS only, with no Windows builds.
+  - Essentia's pretrained models (Discogs-EffNet, genre and mood heads) are CC BY-NC-SA 4.0,
+    non-commercial, which doesn't fit shipping them in a GPLv3 app.
+
 ## 8. OBS now-playing overlay (hardcoded layout)
 
 A single page served by the API server at `/overlay/now-playing?token=<overlay token>`. It's added

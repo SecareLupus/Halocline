@@ -6,4 +6,5 @@ export const offlineYtm: YtmCatalog = {
   refresh: async () => {},
   searchSongs: async () => [],
   getSong: async () => undefined,
+  getRadio: async () => [],
 }

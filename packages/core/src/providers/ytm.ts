@@ -7,6 +7,8 @@ export interface YtmCatalog {
   status(): YtmStatus
   searchSongs(query: string, limit?: number): Promise<YtmSong[]>
   getSong(videoId: string): Promise<YtmSong | undefined>
+  /** YTM's radio for a song (its up-next list), best first, without the song itself. */
+  getRadio(videoId: string): Promise<YtmSong[]>
   /** Rebuilds the session, e.g. after signing in or out. */
   refresh(): Promise<void>
 }
@@ -108,6 +110,32 @@ export class YtmProvider implements YtmCatalog {
         durationMs: basic.duration ? basic.duration * 1000 : null,
         artwork: upscaleArtwork(basic.thumbnail?.[0]?.url),
       }
+    })
+  }
+
+  async getRadio(videoId: string): Promise<YtmSong[]> {
+    if (!VIDEO_ID.test(videoId)) return []
+    return this.guard(async () => {
+      const panel = await (await this.innertube()).music.getUpNext(videoId, true)
+      const songs: YtmSong[] = []
+      for (const node of panel.contents) {
+        // A wrapper pairs a song with its music video; the primary is the one queued.
+        const item = node.is(YTNodes.PlaylistPanelVideoWrapper)
+          ? node.primary
+          : node.is(YTNodes.PlaylistPanelVideo)
+            ? node
+            : null
+        if (!item || item.video_id === videoId || !VIDEO_ID.test(item.video_id)) continue
+        songs.push({
+          videoId: item.video_id,
+          title: item.title.toString() || 'Untitled',
+          artists: item.artists?.map((a) => a.name).filter(Boolean) ?? [item.author],
+          album: item.album?.name ?? null,
+          durationMs: item.duration?.seconds ? item.duration.seconds * 1000 : null,
+          artwork: upscaleArtwork(item.thumbnail?.[0]?.url),
+        })
+      }
+      return songs
     })
   }
 

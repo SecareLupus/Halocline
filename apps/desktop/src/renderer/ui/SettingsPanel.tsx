@@ -30,15 +30,8 @@ export function SettingsPanel(props: { state: AppState }) {
         />
         Stream-safe mode (only songs tagged stream-safe can be queued)
       </label>
-      <label>
-        <input
-          type="checkbox"
-          checked={s()?.autoplay.enabled ?? true}
-          onChange={(e) => patch({ autoplay: { enabled: e.currentTarget.checked } })}
-        />
-        Autoplay similar songs when the queue runs low
-      </label>
       <OutputAndTransitions state={props.state} />
+      <Autoplay state={props.state} />
       <YouTubeMusic state={props.state} />
       <LibraryFolders state={props.state} />
       <ObsOverlay state={props.state} />
@@ -96,6 +89,99 @@ function OutputAndTransitions(props: { state: AppState }) {
         />
         Play tracks from the same album gapless, without crossfading
       </label>
+    </>
+  )
+}
+
+/** Autoplay (PLAN §7): similar songs when the queue runs low. */
+function Autoplay(props: { state: AppState }) {
+  const autoplay = () => props.state.settings()?.autoplay
+  const patch = (p: NonNullable<Parameters<typeof call<'settings.patch'>>[1]['autoplay']>) =>
+    void props.state.run(() => call('settings.patch', { autoplay: p }))
+  const number = (value: string, fallback: number) =>
+    Number.isFinite(Number(value)) && value !== '' ? Number(value) : fallback
+  const off = () => !(autoplay()?.enabled ?? true)
+
+  return (
+    <>
+      <h2>Autoplay</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={autoplay()?.enabled ?? true}
+          onChange={(e) => patch({ enabled: e.currentTarget.checked })}
+        />
+        Add similar songs when the queue runs low
+      </label>
+      <label class="field">
+        <span>Keep queued</span>
+        <input
+          type="number"
+          min="1"
+          max="50"
+          disabled={off()}
+          value={autoplay()?.minQueueLength ?? 2}
+          onChange={(e) => patch({ minQueueLength: Math.round(number(e.currentTarget.value, 2)) })}
+        />
+        <span class="value">songs</span>
+      </label>
+      <label class="field">
+        <span>Draw from</span>
+        <select
+          disabled={off()}
+          value={autoplay()?.sources ?? 'all'}
+          onChange={(e) => patch({ sources: e.currentTarget.value as 'all' | 'library' })}
+        >
+          <option value="all">Library and YouTube Music</option>
+          <option value="library">Library only</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Adventurousness</span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.1"
+          disabled={off()}
+          value={autoplay()?.adventurousness ?? 0.3}
+          onChange={(e) => patch({ adventurousness: Number(e.currentTarget.value) })}
+        />
+        <span class="value">
+          {(autoplay()?.adventurousness ?? 0.3) < 0.2
+            ? 'Closest match'
+            : (autoplay()?.adventurousness ?? 0.3) > 0.7
+              ? 'Wide'
+              : 'Some variety'}
+        </span>
+      </label>
+      <label class="field">
+        <span>Artist gap</span>
+        <input
+          type="number"
+          min="0"
+          max="20"
+          disabled={off()}
+          value={autoplay()?.artistGap ?? 3}
+          onChange={(e) => patch({ artistGap: Math.round(number(e.currentTarget.value, 3)) })}
+        />
+        <span class="value">songs before an artist again</span>
+      </label>
+      <label class="field">
+        <span>Skip recent</span>
+        <input
+          type="number"
+          min="0"
+          max="168"
+          disabled={off()}
+          value={autoplay()?.recentHours ?? 3}
+          onChange={(e) => patch({ recentHours: number(e.currentTarget.value, 3) })}
+        />
+        <span class="value">hours since a song last played</span>
+      </label>
+      <Show when={props.state.settings()?.streamSafeMode}>
+        <p class="empty">Stream-safe mode is on, so autoplay picks only stream-safe songs.</p>
+      </Show>
     </>
   )
 }
