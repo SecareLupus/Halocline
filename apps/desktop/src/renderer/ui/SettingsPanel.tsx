@@ -208,6 +208,19 @@ function AudioAnalysis(props: { state: AppState }) {
         />
         Analyze songs so autoplay can pick by tempo, key, energy and sound
       </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={props.state.settings()?.analysis.duringPlayback ?? false}
+          disabled={!enabled()}
+          onChange={(e) =>
+            void props.state.run(() =>
+              call('settings.patch', { analysis: { duringPlayback: e.currentTarget.checked } }),
+            )
+          }
+        />
+        Keep analyzing while music plays (uses a CPU core, which could make a stream stutter)
+      </label>
       <p class="empty">
         Local files are analyzed in the background, and YouTube Music songs once they've been played
         or prefetched. The first time, a 78 MB sound model (LAION CLAP, Apache-2.0) is downloaded
@@ -220,6 +233,9 @@ function AudioAnalysis(props: { state: AppState }) {
             {s().current ? ` · now: ${s().current}` : ''}
             {s().failed ? ` · ${s().failed} couldn't be read` : ''}
             {!enabled() && s().pending ? ' · paused' : ''}
+            {enabled() && s().pausedForPlayback && s().pending
+              ? ' · waiting for the music to stop'
+              : ''}
           </p>
         )}
       </Show>

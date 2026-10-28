@@ -337,6 +337,11 @@ export const Settings = z.object({
     .object({
       /** Analyze local files and cached cloud tracks for autoplay (PLAN §7). */
       enabled: z.boolean().default(true),
+      /**
+       * Keep analyzing while music plays. Off by default: analysis keeps a CPU core
+       * busy, which could make a live stream stutter.
+       */
+      duringPlayback: z.boolean().default(false),
     })
     .prefault({}),
 })
@@ -388,6 +393,8 @@ export const AnalysisStatus = z.object({
   pending: z.number().int().nonnegative(),
   /** Title of the track being analyzed. */
   current: z.string().nullable(),
+  /** Waiting for playback to stop (unless analysis during playback is on). */
+  pausedForPlayback: z.boolean(),
   lastError: z.string().nullable(),
 })
 export type AnalysisStatus = z.infer<typeof AnalysisStatus>

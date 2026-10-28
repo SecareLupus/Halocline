@@ -465,6 +465,9 @@ fit a GPLv3 app. Instead, with nothing native or Python:
   - Results go in `features` with `ANALYSIS_VERSION`. A track that can't be decoded is stored as
     failed and not retried until the version changes. An unavailable analyzer (no model, a closed
     window) just pauses the queue.
+  - It waits while music plays, since a busy CPU core could make a live stream stutter. A
+    track already being analyzed finishes; the rest resume when playback stops or pauses.
+    "Keep analyzing while music plays" (`analysis.duringPlayback`, off by default) lifts this.
   - Settings → Audio analysis turns it off (`analysis.enabled`) and shows progress, also at
     `GET /v1/analysis` and as `analysis.changed` events.
 - **In autoplay:**

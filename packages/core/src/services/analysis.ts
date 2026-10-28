@@ -46,6 +46,7 @@ export class AnalysisService {
   private running: Promise<void> | null = null
   private again = false
   private current: string | null = null
+  private playing = false
   private lastError: string | null = null
   private model: AnalysisStatus['model'] = { state: 'unavailable', progress: 0, error: null }
 
@@ -57,13 +58,22 @@ export class AnalysisService {
     private readonly events: EventBus,
   ) {
     events.subscribe((e) => {
+      if (e.type === 'player.changed' || e.type === 'track.changed') {
+        const was = this.playing
+        this.playing = e.data.playing
+        // Music stopped or paused: analysis waiting for that can go on.
+        if (was !== this.playing) {
+          this.publish()
+          if (!this.playing) void this.kick()
+        }
+      }
       // New files, a newly cached track, or analysis switched on.
       if (
         e.type === 'library.changed' ||
         e.type === 'track.changed' ||
         e.type === 'settings.changed'
       )
-        this.kick()
+        void this.kick()
     })
   }
 
@@ -94,6 +104,7 @@ export class AnalysisService {
       failed,
       pending: this.pending().length,
       current: this.current,
+      pausedForPlayback: this.waitingForPlayback(),
       lastError: this.lastError,
     }
   }
@@ -183,7 +194,8 @@ export class AnalysisService {
   }
 
   private async drain(): Promise<void> {
-    while (this.analyzer && this.settings.get().analysis.enabled) {
+    // A track already being analyzed finishes; the next waits for playback to stop.
+    while (this.analyzer && this.settings.get().analysis.enabled && !this.waitingForPlayback()) {
       const first = this.pending()[0]
       const next = first && this.library.source(first.id)
       if (!next) break
@@ -203,6 +215,10 @@ export class AnalysisService {
       }
     }
     this.analyzer?.idle?.()
+  }
+
+  private waitingForPlayback(): boolean {
+    return this.playing && !this.settings.get().analysis.duringPlayback
   }
 
   private fail(recordingId: string, error: string): void {

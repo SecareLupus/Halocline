@@ -101,6 +101,38 @@ describe('analysis queue', () => {
     expect(analysis.features([fine.id, broken.id]).has(broken.id)).toBe(false)
   })
 
+  it('waits while music plays, unless told not to', async () => {
+    const { analysis, local } = setup()
+    local('First')
+    local('Second')
+    const playing = (on: boolean) =>
+      core.events.publish({ type: 'player.changed', data: { ...core.player.get(), playing: on } })
+    let calls = 0
+    playing(true)
+    analysis.attach({ analyze: async () => (calls++, features()) })
+    await analysis.kick()
+    expect(calls).toBe(0)
+    expect(analysis.status()).toMatchObject({ pausedForPlayback: true, pending: 2 })
+
+    core.settings.patch({ analysis: { duringPlayback: true } })
+    await analysis.kick()
+    expect(calls).toBe(2)
+    expect(analysis.status().pausedForPlayback).toBe(false)
+  })
+
+  it('goes on when the music stops', async () => {
+    const { analysis, local } = setup()
+    local('Song')
+    core.events.publish({ type: 'player.changed', data: { ...core.player.get(), playing: true } })
+    let calls = 0
+    analysis.attach({ analyze: async () => (calls++, features()) })
+    await analysis.kick()
+    expect(calls).toBe(0)
+    core.events.publish({ type: 'player.changed', data: { ...core.player.get(), playing: false } })
+    await analysis.kick()
+    expect(calls).toBe(1)
+  })
+
   it('does nothing while turned off', async () => {
     const { analysis, local } = setup()
     local('Song')
