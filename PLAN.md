@@ -160,6 +160,19 @@ it's converted to the matching song (§5).
 `youtubei.js`, and the hidden window shares the same partition, so Premium applies to both
 engines.
 
+**Channels:** a Google account can manage brand channels besides its own, and a parent's account
+also lists the family's children's profiles.
+- The status names the channel YouTube marks selected, not the first one listed: children's
+  profiles come first in the TV client's list.
+- Settings → YouTube Music → "Use as" picks among the channels in YouTube's channel switcher
+  (`GET /v1/ytm/accounts`, `PUT /v1/ytm/account`).
+- The choice is kept in the `ytm_account` kv key as `authuser:pageId`.
+  - Search and the direct engine pass it to youtubei.js as `account_index` and
+    `on_behalf_of_user`.
+  - The fallback window's session loads that channel's own switch URL from the list, so its next
+    page plays as it.
+  - Signing out, or the channel disappearing from the list, goes back to the account's own.
+
 **Engine 1: direct.** `youtubei.js` player data, plus a PO token (`bgutils-js`), plus SABR/UMP
 handling (`googlevideo`). The stream service serves the result as a plain byte stream behind
 `track://`. Ads don't apply on this path because we fetch the audio stream ourselves.

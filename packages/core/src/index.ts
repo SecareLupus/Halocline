@@ -1,10 +1,15 @@
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { openDatabase, type Db } from './db'
+import { getKv, openDatabase, setKv, type Db } from './db'
 import { EventBus } from './events'
 import { HealthService } from './services/health'
 import { LibraryService } from './services/library'
-import { YtmProvider, type YtmCatalog, type YtmProviderOptions } from './providers/ytm'
+import {
+  parseAccountId,
+  YtmProvider,
+  type YtmCatalog,
+  type YtmProviderOptions,
+} from './providers/ytm'
 import type { PageRuntime } from './providers/po-token'
 import { YtmStreamer } from './providers/ytm-stream'
 import { TrackCache } from './stream/track-cache'
@@ -50,7 +55,10 @@ export { parseLink, type TrackLink } from './resolve/links'
 export { jaroWinkler, scoreMatch, CONFIDENT, PLAUSIBLE } from './resolve/score'
 export {
   activeAccountName,
+  parseAccountId,
+  toYtmAccount,
   YtmProvider,
+  type YtmIdentity,
   upscaleArtwork,
   type YtmCatalog,
   type YtmProviderOptions,
@@ -138,10 +146,16 @@ export function createCore(options: {
   const queue = new QueueService(db, library, settings, events)
   const health = new HealthService(events)
   const ytmOptions = options.ytm && 'searchSongs' in options.ytm ? null : (options.ytm ?? {})
+  // The YouTube channel to use (a brand channel or the account's own), kept between runs.
+  const ytmAccount = {
+    get: () => getKv(db, 'ytm_account') || null,
+    set: (id: string | null) => setKv(db, 'ytm_account', id ?? ''),
+  }
   const stream = options.stream
   const streamer = stream
     ? new YtmStreamer({
         runtime: stream.runtime,
+        identity: () => parseAccountId(ytmAccount.get()),
         ...(ytmOptions?.cookie && { cookie: ytmOptions.cookie }),
         ...(stream.playerCacheDir && { cacheDir: stream.playerCacheDir }),
       })
@@ -154,8 +168,15 @@ export function createCore(options: {
         })
       : null
   const ytm = ytmOptions
-    ? new YtmProvider(events, { ...ytmOptions, playback: streamer !== null })
+    ? new YtmProvider(events, { ...ytmOptions, account: ytmAccount, playback: streamer !== null })
     : (options.ytm as YtmCatalog)
+  // The direct engine plays as the chosen channel too.
+  let ytmAccountId = ytm.status().accountId
+  events.subscribe((e) => {
+    if (e.type !== 'ytm.changed' || e.data.accountId === ytmAccountId) return
+    ytmAccountId = e.data.accountId
+    streamer?.refresh()
+  })
   const defaultArtworkDir =
     options.dbPath === ':memory:'
       ? join(tmpdir(), 'halocline-artwork')

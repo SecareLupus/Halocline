@@ -26,6 +26,7 @@ import type {
   SettingsPatch,
   SplitResult,
   StampedEvent,
+  YtmAccount,
   YtmSong,
   YtmStatus,
 } from '@halocline/core'
@@ -47,6 +48,10 @@ export interface IpcHandlers {
   /** Enqueues by resolving `input`: a candidate's input, a link, a ref or a recording ID. */
   'queue.addInput': (args: { input: string; position?: QueuePosition }) => QueueItem
   'ytm.status': () => YtmStatus
+  /** The channels the signed-in account can use YouTube Music as. */
+  'ytm.accounts': () => YtmAccount[]
+  /** Uses one of those channels; null goes back to the account's own. */
+  'ytm.selectAccount': (args: { id: string | null }) => YtmStatus
   /** Audio analysis progress (PLAN §7). */
   'analysis.status': () => AnalysisStatus
   'ytm.signIn': () => void

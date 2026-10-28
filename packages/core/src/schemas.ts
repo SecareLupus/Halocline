@@ -156,10 +156,27 @@ export const YtmSong = z.object({
 })
 export type YtmSong = z.infer<typeof YtmSong>
 
+/** A channel the signed-in Google account can use YouTube Music as. */
+export const YtmAccount = z.object({
+  /** Pass to `PUT /v1/ytm/account` to use this channel. */
+  id: z.string(),
+  name: z.string(),
+  /** e.g. "@SecareLupusYT". */
+  handle: z.string().nullable(),
+  photo: z.string().nullable(),
+  /** The channel requests run as now. */
+  selected: z.boolean(),
+  /** Opens this channel in a browser session (the app's YouTube Music window uses it). */
+  switchUrl: z.string().nullable(),
+})
+export type YtmAccount = z.infer<typeof YtmAccount>
+
 export const YtmStatus = z.object({
   signedIn: z.boolean(),
-  /** Account display name, when signed in and YouTube returns one. */
+  /** Display name of the channel requests run as, when signed in. */
   account: z.string().nullable(),
+  /** The chosen channel's `YtmAccount.id`; null means the Google account's own. */
+  accountId: z.string().nullable(),
   /** Whether any engine can play YTM songs yet. Search and queueing work regardless. */
   playback: z.boolean(),
   lastError: z.string().nullable(),

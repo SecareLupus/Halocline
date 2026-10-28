@@ -199,6 +199,18 @@ describe('library', () => {
   })
 })
 
+describe('YouTube Music channels', () => {
+  it('lists none when signed out, and only admin may choose', async () => {
+    const list = await call('GET', '/v1/ytm/accounts', { token: tokenFor('read') })
+    expect(await list.json()).toEqual([])
+    const choose = await call('PUT', '/v1/ytm/account', {
+      token: tokenFor('read'),
+      body: { id: '0:123' },
+    })
+    expect(choose.status).toBe(403)
+  })
+})
+
 describe('audio analysis', () => {
   it('reports progress', async () => {
     const res = await call('GET', '/v1/analysis', { token: tokenFor('read') })

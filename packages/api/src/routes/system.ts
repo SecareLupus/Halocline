@@ -4,12 +4,13 @@ import {
   ScanStatus,
   Settings,
   SettingsPatch,
+  YtmAccount,
   YtmStatus,
   type Core,
 } from '@halocline/core'
-import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
+import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import { requireScope, type ApiEnv } from '../auth'
-import { authErrors } from '../problem'
+import { authErrors, errorResponse } from '../problem'
 
 const HealthReport = Health.extend({ scan: ScanStatus, ytm: YtmStatus })
 
@@ -28,6 +29,54 @@ export function registerSystem(app: OpenAPIHono<ApiEnv>, core: Core) {
     }),
     (c) =>
       c.json({ ...core.health.get(), scan: core.scanner.status(), ytm: core.ytm.status() }, 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/ytm/accounts',
+      tags: ['system'],
+      summary: 'The YouTube channels the signed-in account can use',
+      description:
+        "The Google account's own channel and any brand channels it manages. Empty when " +
+        'signed out. `selected` marks the one in use.',
+      middleware: [requireScope('read')],
+      responses: {
+        200: {
+          description: 'Channels',
+          content: { 'application/json': { schema: z.array(YtmAccount) } },
+        },
+        ...authErrors,
+      },
+    }),
+    async (c) => c.json(await core.ytm.accounts(), 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/v1/ytm/account',
+      tags: ['system'],
+      summary: 'Choose which channel YouTube Music is used as',
+      description:
+        'Search, both playback engines and Premium follow it. `null` goes back to the Google ' +
+        "account's own channel.",
+      middleware: [requireScope('admin')],
+      request: {
+        body: {
+          content: {
+            'application/json': { schema: z.object({ id: z.string().min(1).nullable() }) },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: { description: 'Status', content: { 'application/json': { schema: YtmStatus } } },
+        ...authErrors,
+        404: errorResponse("Not one of the account's channels"),
+      },
+    }),
+    async (c) => c.json(await core.ytm.selectAccount(c.req.valid('json').id), 200),
   )
 
   app.openapi(

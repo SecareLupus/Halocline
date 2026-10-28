@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { activeAccountName, createCore, parseYtmRef, upscaleArtwork, type Core } from '../src'
+import {
+  activeAccountName,
+  createCore,
+  parseAccountId,
+  parseYtmRef,
+  toYtmAccount,
+  upscaleArtwork,
+  type Core,
+} from '../src'
 import { fakeYtm, ytmSong } from './helpers'
 
 let core: Core | undefined
@@ -25,6 +33,34 @@ describe('parseYtmRef', () => {
     expect(activeAccountName([{ name: 'Solo', selected: false }])).toBe('Solo')
     expect(activeAccountName(items.map((i) => ({ ...i, selected: false })))).toBeNull()
   })
+  it("reads channel choices from YouTube's channel switcher", () => {
+    const signin = (pageId?: string) => ({
+      accountSigninToken: {
+        signinUrl: `/signin?action_handle_signin=true&authuser=1${pageId ? `&pageid=${pageId}` : ''}&next=%2F`,
+      },
+    })
+    const own = toYtmAccount({
+      name: 'Desmond Duval',
+      handle: '@DesmondDuval',
+      photo: 'https://yt3.ggpht.com/a',
+      selected: true,
+      tokens: [{ accountStateToken: {} }, signin()],
+    })
+    expect(own).toMatchObject({ id: '1', name: 'Desmond Duval', handle: '@DesmondDuval' })
+    expect(own?.switchUrl).toMatch(/^https:\/\/www\.youtube\.com\/signin\?/)
+    const brand = toYtmAccount({
+      name: 'SecareLupus',
+      handle: '@SecareLupusYT',
+      photo: undefined,
+      selected: false,
+      tokens: [{ pageIdToken: { pageId: '112233' } }, signin('112233')],
+    })
+    expect(brand).toMatchObject({ id: '1:112233', selected: false, photo: null })
+    expect(parseAccountId(brand!.id)).toEqual({ authUser: 1, pageId: '112233' })
+    expect(parseAccountId(null)).toEqual({ authUser: 0, pageId: null })
+    expect(parseAccountId('nonsense')).toEqual({ authUser: 0, pageId: null })
+  })
+
   it('upscales Google thumbnail URLs', () => {
     expect(upscaleArtwork('https://lh3.googleusercontent.com/x=w120-h120-l90-rj')).toBe(
       'https://lh3.googleusercontent.com/x=w544-h544-l90-rj',

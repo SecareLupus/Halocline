@@ -65,6 +65,9 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
       })
     },
     'ytm.status': () => core.ytm.status(),
+    'ytm.accounts': () => core.ytm.accounts(),
+    'ytm.selectAccount': (a) =>
+      core.ytm.selectAccount(z.object({ id: z.string().min(1).nullable() }).parse(a).id),
     'ytm.signIn': () => {
       openYtmSignIn(BrowserWindow.getFocusedWindow() ?? undefined)
     },

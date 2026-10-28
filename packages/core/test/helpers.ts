@@ -28,6 +28,7 @@ export function fakeYtm(
   const status: YtmStatus = {
     signedIn: false,
     account: null,
+    accountId: null,
     playback: options.playback ?? false,
     lastError: null,
   }
@@ -39,6 +40,8 @@ export function fakeYtm(
       return songs.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()))
     },
     getSong: async (id) => songs.find((s) => s.videoId === id),
+    accounts: async () => [],
+    selectAccount: async () => status,
     getRadio: async (id) => {
       if (options.down) throw new Error('offline')
       return options.radio?.[id] ?? []

@@ -275,6 +275,9 @@ function YouTubeMusic(props: { state: AppState }) {
           </button>
         </Show>
       </div>
+      <Show when={status()?.signedIn}>
+        <YtmChannel state={props.state} />
+      </Show>
       <Show when={!status()?.playback}>
         <p class="empty">
           YouTube Music songs can be searched and queued, but not played yet: no playback engine is
@@ -283,6 +286,46 @@ function YouTubeMusic(props: { state: AppState }) {
       </Show>
       <Show when={status()?.lastError}>{(error) => <p class="warning">{error()}</p>}</Show>
     </>
+  )
+}
+
+/**
+ * Which of the account's channels YouTube Music is used as: the Google account's
+ * own, or a brand channel it manages. Shown only when there's a choice.
+ */
+function YtmChannel(props: { state: AppState }) {
+  // Listed again whenever the YTM status changes (sign-in, a switch).
+  const [accounts] = createResource(
+    () => props.state.ytm(),
+    () => call('ytm.accounts'),
+  )
+  const chosen = () => {
+    const list = accounts() ?? []
+    const id = props.state.ytm()?.accountId
+    return (list.find((a) => a.id === id) ?? list.find((a) => a.selected))?.id ?? ''
+  }
+  return (
+    <Show when={(accounts()?.length ?? 0) > 1}>
+      <label class="field">
+        <span>Use as</span>
+        <select
+          value={chosen()}
+          onChange={(e) => {
+            const id = e.currentTarget.value
+            void props.state.run(() => call('ytm.selectAccount', { id }))
+          }}
+        >
+          <For each={accounts()}>
+            {(a) => (
+              <option value={a.id}>
+                {a.name}
+                {a.handle ? ` (${a.handle})` : ''}
+              </option>
+            )}
+          </For>
+        </select>
+      </label>
+    </Show>
   )
 }
 

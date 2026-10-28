@@ -77,6 +77,37 @@ export function openYtmSignIn(parent: BrowserWindow | undefined): BrowserWindow 
   return window
 }
 
+/**
+ * Makes the YTM session's web pages act as another of the account's channels,
+ * by loading YouTube's own switch URL for it (from the channel list) in a hidden
+ * window. The fallback engine's next page then plays as that channel.
+ */
+export function switchYtmChannel(switchUrl: string): Promise<void> {
+  const url = new URL(switchUrl)
+  if (url.origin !== 'https://www.youtube.com' || url.pathname !== '/signin') {
+    return Promise.reject(new Error('Not a YouTube channel switch URL'))
+  }
+  const window = new BrowserWindow({
+    show: false,
+    webPreferences: { partition: YTM_PARTITION, sandbox: true, contextIsolation: true },
+  })
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => finish(new Error('Switching channels timed out')), 30_000)
+    const finish = (err?: Error) => {
+      clearTimeout(timer)
+      if (!window.isDestroyed()) window.destroy()
+      if (err) reject(err)
+      else resolve()
+    }
+    // Done once YouTube has handled the switch and sent the page on.
+    window.webContents.on('did-navigate', (_event, to) => {
+      const page = new URL(to)
+      if (page.hostname.endsWith('youtube.com') && page.pathname !== '/signin') finish()
+    })
+    window.loadURL(url.toString()).catch((err: unknown) => finish(err as Error))
+  })
+}
+
 /** Signs out by clearing everything the YTM session stored. */
 export async function signOutYtm(): Promise<void> {
   await ytmSession().clearStorageData()

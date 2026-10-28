@@ -63,11 +63,21 @@ const song = (
 /** YTM search returns `songs`; getSong also knows `videos` (uploads that aren't songs). */
 function ytm(songs: YtmSong[], videos: YtmSong[] = []): YtmCatalog {
   return {
-    status: () => ({ signedIn: false, account: null, playback: true, lastError: null }),
+    status: () => ({
+      signedIn: false,
+      account: null,
+      accountId: null,
+      playback: true,
+      lastError: null,
+    }),
     refresh: async () => {},
     searchSongs: async () => songs,
     getSong: async (id) => [...songs, ...videos].find((s) => s.videoId === id),
     getRadio: async () => [],
+    accounts: async () => [],
+    selectAccount: async () => {
+      throw new Error('signed out')
+    },
   }
 }
 

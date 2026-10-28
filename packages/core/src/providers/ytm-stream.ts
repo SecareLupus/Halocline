@@ -13,6 +13,7 @@ import {
   type Types,
 } from 'youtubei.js'
 import { PoTokenMinter, runInPage, type PageRuntime } from './po-token'
+import { identityOptions, type YtmIdentity } from './ytm'
 
 /** Which step of opening a stream failed, for health and `test:stream` (PLAN §4). */
 export type StreamStep = 'po_token' | 'player' | 'decipher' | 'sabr'
@@ -44,6 +45,8 @@ export interface YtmStreamerOptions {
   runtime: PageRuntime
   /** Cookie header from the signed-in session, if any. */
   cookie?: () => Promise<string | undefined>
+  /** The channel to play as (Premium follows the account), when signed in. */
+  identity?: () => YtmIdentity
   /** Where youtubei.js keeps the parsed player script between runs. */
   cacheDir?: string
   fetch?: typeof globalThis.fetch
@@ -149,6 +152,7 @@ export class YtmStreamer implements AudioSource {
         fetch: this.fetch,
         cache: new UniversalCache(Boolean(this.options.cacheDir), this.options.cacheDir),
         ...(signedIn && { cookie }),
+        ...(signedIn && this.options.identity && identityOptions(this.options.identity())),
       })
     })().catch((err: unknown) => {
       this.session = null

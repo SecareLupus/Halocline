@@ -9,7 +9,7 @@ import { handleArtworkProtocol, handleTrackProtocol, registerSchemes } from './p
 import { runScanInWorker } from './scan-runner'
 import { runStreamSelfTest } from './stream-self-test'
 import { createPlayerWindow, createUiWindow } from './windows'
-import { lockDownYtmSession, watchYtmCookies, ytmCookie } from './ytm-auth'
+import { lockDownYtmSession, switchYtmChannel, watchYtmCookies, ytmCookie } from './ytm-auth'
 import { YtmFallbackEngine } from './ytm-engine'
 import { YtmPageRuntime } from './ytm-runtime'
 
@@ -83,6 +83,21 @@ app.whenReady().then(async () => {
     if (event.sender === player.webContents && router.accepts('player', report)) {
       core.player.report(report)
     }
+  })
+  // The fallback's web pages play as the chosen channel too (search and the direct
+  // engine get it from the core).
+  let channel = core.ytm.status().accountId
+  core.events.subscribe((event) => {
+    if (event.type !== 'ytm.changed' || event.data.accountId === channel) return
+    channel = event.data.accountId
+    void core.ytm
+      .accounts()
+      .then((accounts) => {
+        const chosen =
+          accounts.find((a) => a.id === channel) ?? accounts.find((a) => !a.id.includes(':'))
+        return chosen?.switchUrl ? switchYtmChannel(chosen.switchUrl) : undefined
+      })
+      .catch((err: unknown) => console.error('[ytm] switching channels', err))
   })
   // The fallback plays on the same device as the player renderer.
   core.events.subscribe((event) => {
