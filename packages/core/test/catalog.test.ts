@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createCore, parseYtmRef, upscaleArtwork, type Core } from '../src'
+import { activeAccountName, createCore, parseYtmRef, upscaleArtwork, type Core } from '../src'
 import { fakeYtm, ytmSong } from './helpers'
 
 let core: Core | undefined
@@ -13,6 +13,17 @@ describe('parseYtmRef', () => {
     expect(parseYtmRef('https://music.youtube.com/watch?v=fa5IWHDbftI&si=x')).toBeUndefined()
     expect(parseYtmRef('https://www.youtube.com/watch?v=fa5IWHDbftI')).toBeUndefined()
     expect(parseYtmRef('ytm:short')).toBeUndefined()
+  })
+  it('names the account requests run as, not the family profiles listed before it', () => {
+    // As YouTube's TV account list returns it for a parent with children's profiles.
+    const items = [
+      { name: 'Keaton', selected: false },
+      { name: 'Amari', selected: false },
+      { name: 'Desmond Duval', selected: true },
+    ]
+    expect(activeAccountName(items)).toBe('Desmond Duval')
+    expect(activeAccountName([{ name: 'Solo', selected: false }])).toBe('Solo')
+    expect(activeAccountName(items.map((i) => ({ ...i, selected: false })))).toBeNull()
   })
   it('upscales Google thumbnail URLs', () => {
     expect(upscaleArtwork('https://lh3.googleusercontent.com/x=w120-h120-l90-rj')).toBe(

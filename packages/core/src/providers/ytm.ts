@@ -28,6 +28,16 @@ export function upscaleArtwork(url: string | undefined): string | null {
   return url.replace(/=w\d+-h\d+/, '=w544-h544')
 }
 
+/**
+ * The name of the account requests run as. YouTube's account list also holds the
+ * family's other profiles (supervised and YouTube Kids ones come first), so it's
+ * the one marked selected, not the first.
+ */
+export function activeAccountName(items: { name: string; selected: boolean }[]): string | null {
+  const active = items.find((i) => i.selected) ?? (items.length === 1 ? items[0] : undefined)
+  return active?.name || null
+}
+
 /** Cookies that mean a Google account is signed in on this session. */
 const isSignedIn = (cookie: string | undefined) =>
   Boolean(cookie && /(?:^|;\s*)(?:__Secure-3PAPISID|SAPISID)=/.test(cookie))
@@ -64,8 +74,10 @@ export class YtmProvider implements YtmCatalog {
     if (signedIn) {
       try {
         const info = await (await this.innertube()).account.getInfo()
-        const item = info.contents?.contents.firstOfType(YTNodes.AccountItem)
-        account = item?.account_name.toString() || null
+        const items = info.contents?.contents.filterType(YTNodes.AccountItem) ?? []
+        account = activeAccountName(
+          items.map((i) => ({ name: i.account_name.toString(), selected: i.is_selected })),
+        )
       } catch {
         // The name is cosmetic; signed-in cookies are what count.
       }
