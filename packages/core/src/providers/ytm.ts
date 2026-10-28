@@ -1,6 +1,7 @@
 import { Innertube, YTNodes } from 'youtubei.js'
 import type { EventBus } from '../events'
 import { DomainError } from '../errors'
+import { normalizeArtist } from '../library/match'
 import type { YtmAccount, YtmCollection, YtmCollectionDetail, YtmSong, YtmStatus } from '../schemas'
 
 /** What the rest of the core needs from YouTube Music. Tests supply a fake. */
@@ -100,6 +101,33 @@ export function parseCollectionRef(
 ): { kind: YtmCollection['kind']; id: string } | undefined {
   const match = COLLECTION_REF.exec(ref.trim())
   return match ? { kind: match[1] as YtmCollection['kind'], id: match[2]! } : undefined
+}
+
+/**
+ * Who a playlist is by, judging by its tracks (YouTube Music's playlist page
+ * doesn't name the owner): one artist if most tracks are theirs, otherwise the
+ * two most frequent and a count of the rest. Null when no track names an artist.
+ */
+export function summariseArtists(songs: Pick<YtmSong, 'artists'>[]): string | null {
+  const counts = new Map<string, { name: string; songs: number }>()
+  for (const song of songs) {
+    // Each artist counts once per song, however they're credited on it.
+    for (const name of new Set(song.artists.filter(Boolean))) {
+      const key = normalizeArtist(name)
+      const entry = counts.get(key) ?? { name, songs: 0 }
+      entry.songs++
+      counts.set(key, entry)
+    }
+  }
+  const ranked = [...counts.values()].sort((a, b) => b.songs - a.songs)
+  const [first, second, third] = ranked
+  if (!first) return null
+  if (!second || first.songs >= songs.length * 0.6) return first.name
+  if (!third) return `${first.name} & ${second.name}`
+  const rest = ranked.length - 2
+  return rest === 1
+    ? `${first.name}, ${second.name} & ${third.name}`
+    : `${first.name}, ${second.name} & ${rest} more`
 }
 
 /** Google thumbnail URLs carry their size; ask for a larger square. */
@@ -363,7 +391,7 @@ export class YtmProvider implements YtmCatalog {
         ref,
         kind: 'playlist',
         title: header?.title ? String(header.title) : 'Untitled playlist',
-        by: null,
+        by: summariseArtists(songs),
         year: null,
         artwork: songs[0]?.artwork ?? null,
         songs,

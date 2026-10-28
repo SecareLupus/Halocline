@@ -58,6 +58,7 @@ export {
   MAX_COLLECTION_SONGS,
   parseAccountId,
   parseCollectionRef,
+  summariseArtists,
   toYtmAccount,
   YtmProvider,
   type YtmIdentity,

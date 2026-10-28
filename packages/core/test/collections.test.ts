@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createCore, parseCollectionLink, type Core, type YtmCollectionDetail } from '../src'
+import {
+  createCore,
+  parseCollectionLink,
+  summariseArtists,
+  type Core,
+  type YtmCollectionDetail,
+} from '../src'
 import { fakeYtm, ytmSong } from './helpers'
 
 let core: Core
@@ -117,6 +123,22 @@ describe('albums and playlists', () => {
       type: 'invalid_request',
       message: expect.stringContaining('/v1/queue/collections'),
     })
+  })
+
+  it("name a playlist by its tracks' artists", () => {
+    const by = (...artists: string[][]) => summariseArtists(artists.map((a) => ({ artists: a })))
+    // Mostly one artist (60% or more of the tracks): just them.
+    expect(by(['Daft Punk'], ['Daft Punk'], ['Daft Punk', 'Pharrell Williams'], ['Justice'])).toBe(
+      'Daft Punk',
+    )
+    expect(by(['Daft Punk'], ['Justice'])).toBe('Daft Punk & Justice')
+    expect(by(['Daft Punk'], ['Daft Punk'], ['Justice'], ['Air'])).toBe('Daft Punk, Justice & Air')
+    expect(by(['Daft Punk'], ['Daft Punk'], ['Justice'], ['Air'], ['Cassius'], ['Modjo'])).toBe(
+      'Daft Punk, Justice & 3 more',
+    )
+    // The same artist spelled two ways is one artist.
+    expect(by(['Daft Punk'], ['DAFT PUNK - Topic'], ['Justice'])).toBe('Daft Punk')
+    expect(by([], [])).toBeNull()
   })
 
   it('reject refs that are wrong or unknown', async () => {
