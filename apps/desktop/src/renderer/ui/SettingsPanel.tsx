@@ -465,16 +465,22 @@ function ApiTokens(props: { state: AppState }) {
   return (
     <>
       <h2>API</h2>
-      <p>
-        <Show when={apiUrl()} fallback="The API server is not running.">
-          Listening on <code>{apiUrl()}</code> ·{' '}
-          <a href={`${apiUrl()}/docs`} target="_blank" rel="noreferrer">
-            API docs
-          </a>{' '}
-          (try requests with a token from below) · OpenAPI document at{' '}
-          <code>{apiUrl()}/openapi.json</code>
-        </Show>
-      </p>
+      <Show when={apiUrl()} fallback={<p>The API server is not running.</p>}>
+        <p class="api-info">
+          <span>
+            Listening on <code>{apiUrl()}</code>
+          </span>
+          <span>
+            <a href={`${apiUrl()}/docs`} target="_blank" rel="noreferrer">
+              API docs
+            </a>{' '}
+            (try requests with a token from below)
+          </span>
+          <span>
+            OpenAPI document at <code>{apiUrl()}/openapi.json</code>
+          </span>
+        </p>
+      </Show>
       <ul class="list">
         <For each={tokens()} fallback={<li class="empty">No tokens yet.</li>}>
           {(t) => (

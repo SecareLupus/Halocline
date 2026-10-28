@@ -108,6 +108,12 @@ input:not([type]) {
   display: none;
 }
 
+.api-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .topbar-actions {
   display: flex;
   gap: 8px;
