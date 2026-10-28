@@ -70,6 +70,8 @@ Key decisions:
 - **The player plays every source from a URL on a custom protocol** (`track://<sourceId>`). The
   stream service decides what sits behind it: a local file, a cached file, or a direct YTM
   stream. The player never knows which, so changes to how YouTube streams stay inside one module.
+  `track://` answers with CORS approval and the decks request it in CORS mode. The pages are
+  another origin, and Web Audio outputs only silence for media it may not read.
 - **Audio lives in its own renderer**, separate from the UI, so reloading the UI never drops audio.
 - **Two decks** (A/B `<audio>` elements) on one `AudioContext`. This gives gapless playback and
   crossfade. Output device selection uses `setSinkId`. That covers routing to a

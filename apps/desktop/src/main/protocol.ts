@@ -11,7 +11,13 @@ export function registerSchemes(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: TRACK_SCHEME,
-      privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true },
+      privileges: {
+        standard: true,
+        secure: true,
+        stream: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+      },
     },
     { scheme: ARTWORK_SCHEME, privileges: { standard: true, secure: true } },
   ])
@@ -39,11 +45,24 @@ export function handleTrackProtocol(core: Core): void {
     switch (source.kind) {
       case 'local':
         // Forward Range headers so seeking works.
-        return net.fetch(pathToFileURL(source.locator).toString(), { headers: request.headers })
+        return allowCors(
+          await net.fetch(pathToFileURL(source.locator).toString(), { headers: request.headers }),
+        )
       case 'ytm':
         // Served from the track cache, which downloads on first request (PLAN §4).
         if (!core.tracks) return new Response('No YouTube Music engine', { status: 501 })
-        return core.tracks.read(source.locator, request.headers.get('range'))
+        return allowCors(await core.tracks.read(source.locator, request.headers.get('range')))
     }
   })
+}
+
+/**
+ * The player's pages are another origin than track://, and Web Audio outputs
+ * only silence for media it isn't allowed to read. Only the app's own pages use
+ * this scheme (the YouTube Music window has its own session).
+ */
+function allowCors(res: Response): Response {
+  const headers = new Headers(res.headers)
+  headers.set('Access-Control-Allow-Origin', '*')
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers })
 }

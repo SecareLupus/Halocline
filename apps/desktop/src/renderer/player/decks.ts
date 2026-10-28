@@ -231,6 +231,9 @@ export class Decks {
   private createDeck(): Deck {
     const audio = new Audio()
     audio.preload = 'auto'
+    // track:// is another origin than this page; without a CORS request (which the
+    // protocol approves) Web Audio would get only silence from the element.
+    audio.crossOrigin = 'anonymous'
     const gain = this.context.createGain()
     gain.gain.value = 0
     this.context.createMediaElementSource(audio).connect(gain).connect(this.master)

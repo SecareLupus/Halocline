@@ -60,16 +60,21 @@ export function QueueList(props: { state: AppState }) {
                     <select
                       aria-label="Play from"
                       title="Where to play this from"
-                      value={item.pinnedSourceId ?? ''}
                       onChange={(e) => {
                         const sourceId = e.currentTarget.value || null
                         void props.state.run(() => call('queue.pin', { id: item.id, sourceId }))
                       }}
                     >
-                      <option value="">Auto</option>
+                      <option value="" selected={!item.pinnedSourceId}>
+                        Auto
+                      </option>
                       <For each={bySourceOrder(item.sources)}>
                         {(source) => (
-                          <option value={source.id} disabled={!source.available}>
+                          <option
+                            value={source.id}
+                            disabled={!source.available}
+                            selected={source.id === item.pinnedSourceId}
+                          >
                             {sourceLabel(source, item.sources)}
                           </option>
                         )}

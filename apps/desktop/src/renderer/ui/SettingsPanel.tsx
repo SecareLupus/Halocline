@@ -52,19 +52,28 @@ function OutputAndTransitions(props: { state: AppState }) {
     <>
       <label class="field">
         <span>Output device</span>
-        <select
-          value={playback()?.outputDeviceId ?? ''}
-          onChange={(e) => patch({ outputDeviceId: e.currentTarget.value })}
-        >
-          <option value="">System default</option>
-          <For each={output()?.devices}>{(d) => <option value={d.deviceId}>{d.label}</option>}</For>
+        {/* The options are rebuilt whenever the player reports its devices, and a rebuilt
+            <select> shows its first option; marking the chosen <option> keeps the choice. */}
+        <select onChange={(e) => patch({ outputDeviceId: e.currentTarget.value })}>
+          <option value="" selected={!playback()?.outputDeviceId}>
+            System default
+          </option>
+          <For each={output()?.devices}>
+            {(d) => (
+              <option value={d.deviceId} selected={d.deviceId === playback()?.outputDeviceId}>
+                {d.label}
+              </option>
+            )}
+          </For>
           <Show
             when={
               playback()?.outputDeviceId &&
               !output()?.devices.some((d) => d.deviceId === playback()?.outputDeviceId)
             }
           >
-            <option value={playback()?.outputDeviceId}>Disconnected device</option>
+            <option value={playback()?.outputDeviceId} selected>
+              Disconnected device
+            </option>
           </Show>
         </select>
       </label>
@@ -309,7 +318,6 @@ function YtmChannel(props: { state: AppState }) {
       <label class="field">
         <span>Use as</span>
         <select
-          value={chosen()}
           onChange={(e) => {
             const id = e.currentTarget.value
             void props.state.run(() => call('ytm.selectAccount', { id }))
@@ -317,7 +325,7 @@ function YtmChannel(props: { state: AppState }) {
         >
           <For each={accounts()}>
             {(a) => (
-              <option value={a.id}>
+              <option value={a.id} selected={a.id === chosen()}>
                 {a.name}
                 {a.handle ? ` (${a.handle})` : ''}
               </option>
