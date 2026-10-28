@@ -88,8 +88,7 @@ export async function runScan(
 
   progress('walking', true)
   if (input.paths) {
-    for (const raw of input.paths) {
-      const path = resolve(raw)
+    for (const path of outermost(input.paths)) {
       const s = await stat(path).catch(() => null)
       if (!s) missing.push(path)
       else if (s.isDirectory()) {
@@ -128,4 +127,13 @@ export async function runScan(
   flush()
   if (missing.length) emit({ type: 'missing', paths: missing })
   progress('reading', true)
+}
+
+/**
+ * The paths to visit, without those inside another one. A new folder arrives as
+ * events for the folder and for each file in it; walking the folder covers them.
+ */
+function outermost(paths: string[]): string[] {
+  const unique = [...new Set(paths.map((p) => resolve(p)))]
+  return unique.filter((p) => !unique.some((other) => other !== p && isUnder(other, p)))
 }

@@ -157,6 +157,14 @@ describe('LibraryScanner', () => {
     await vi.waitFor(() => expect(sourcesOf('alpha')[0]?.available).toBe(false))
   })
 
+  it('reads a new folder and the files inside it once', async () => {
+    await setup().scanner.start()
+    writeWav(join(music, 'sub/b.wav'), { title: 'Bravo' })
+    // What the watcher reports for a folder that appears with a file in it.
+    await core.scanner.scanPaths([join(music, 'sub'), join(music, 'sub/b.wav'), join(music, 'sub')])
+    expect(core.scanner.status()).toMatchObject({ found: 1, processed: 1, added: 1 })
+  })
+
   it('reports progress as scan.changed events', async () => {
     writeWav(join(music, 'a.wav'), { title: 'Alpha' })
     setup()
