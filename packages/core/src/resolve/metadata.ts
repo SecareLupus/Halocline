@@ -13,7 +13,7 @@ export interface MetadataDeps {
  * Identifies itself honestly: Spotify and Tidal give link-preview tags (title,
  * artist, duration) to clients like this, and only a script shell to browsers.
  */
-const USER_AGENT = 'Halocline/0.1.1 (link preview; +https://github.com/SecareLupus/Halocline)'
+const USER_AGENT = 'Halocline/0.1.2 (link preview; +https://github.com/SecareLupus/Halocline)'
 const TIMEOUT_MS = 8000
 /** The score of a perfect title and artist when one side has no duration. */
 const EXACT_WITHOUT_DURATION = 0.85
