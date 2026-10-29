@@ -20,6 +20,10 @@ asarUnpack:
 linux:
   target: [AppImage, deb]
   category: AudioVideo
+  # One PNG per size the hicolor theme knows (up to 512): a 1024 px icon alone lands
+  # in a folder no theme reads, so launchers and taskbars show none. Rendered from
+  # build/icon.svg: inkscape icon.svg -w N -h N -o icons/NxN.png
+  icon: icons
   syncDesktopName: true
   maintainer: Desmond Duval <haydre@gmail.com>
   synopsis: Music player for live streaming
