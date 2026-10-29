@@ -1,5 +1,7 @@
 import { DomainError, type Core } from '@halocline/core'
 import { OpenAPIHono } from '@hono/zod-openapi'
+import type { MiddlewareHandler } from 'hono'
+import { cors } from 'hono/cors'
 import { authenticate, type ApiEnv } from './auth'
 import { problem } from './problem'
 import { rateLimit, RateLimiter } from './rate-limit'
@@ -35,6 +37,19 @@ export function createApi(core: Core, options: ApiOptions = {}): OpenAPIHono<Api
   })
   app.notFound((c) => problem(c, 'not_found', `No route for ${c.req.method} ${c.req.path}`))
 
+  // Browser-based bots (e.g. Twitchat) call from their own origin. Any origin is fine:
+  // auth is a bearer token, never a cookie, so a page can only use a token it was given.
+  // Registered before auth, so preflights (which carry no token) get answered.
+  app.use('*', allowPrivateNetwork)
+  app.use(
+    '*',
+    cors({
+      origin: '*',
+      allowHeaders: ['Authorization', 'Content-Type'],
+      exposeHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'Retry-After'],
+    }),
+  )
+
   app.openAPIRegistry.registerComponent('securitySchemes', 'bearer', {
     type: 'http',
     scheme: 'bearer',
@@ -60,4 +75,12 @@ export function createApi(core: Core, options: ApiOptions = {}): OpenAPIHono<Api
   registerEvents(app, core)
   registerOverlay(app, core)
   return app
+}
+
+/** Lets public sites reach this loopback server through Chrome's Private Network Access preflight. */
+const allowPrivateNetwork: MiddlewareHandler = async (c, next) => {
+  await next()
+  if (c.req.method === 'OPTIONS' && c.req.header('Access-Control-Request-Private-Network')) {
+    c.res.headers.set('Access-Control-Allow-Private-Network', 'true')
+  }
 }

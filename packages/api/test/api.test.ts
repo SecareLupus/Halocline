@@ -38,6 +38,37 @@ const json = (res: Response | Promise<Response>): Promise<any> =>
 const song = (title: string, streamSafe = false) =>
   core.library.create({ title, artists: ['Artist'], inLibrary: true, streamSafe })
 
+describe('cors', () => {
+  const origin = 'https://twitchat.fr'
+
+  it('answers preflights from any origin without a token', async () => {
+    const res = await call('OPTIONS', '/v1/queue/items', {
+      headers: {
+        Origin: origin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'authorization,content-type',
+        'Access-Control-Request-Private-Network': 'true',
+      },
+    })
+    expect(res.status).toBe(204)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(res.headers.get('Access-Control-Allow-Headers')).toMatch(/Authorization/)
+    expect(res.headers.get('Access-Control-Allow-Private-Network')).toBe('true')
+  })
+
+  it('adds the CORS header to successes and errors alike', async () => {
+    const ok = await call('GET', '/v1/queue', {
+      token: tokenFor('read'),
+      headers: { Origin: origin },
+    })
+    expect(ok.status).toBe(200)
+    expect(ok.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    const denied = await call('GET', '/v1/queue', { headers: { Origin: origin } })
+    expect(denied.status).toBe(401)
+    expect(denied.headers.get('Access-Control-Allow-Origin')).toBe('*')
+  })
+})
+
 describe('auth', () => {
   it('rejects missing and unknown tokens with problem+json', async () => {
     const res = await call('GET', '/v1/queue')

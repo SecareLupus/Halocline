@@ -376,6 +376,9 @@ the app rather than a CDN, so it works offline under a strict CSP. Reading needs
 
 **Network:**
 - The server binds to `127.0.0.1` by default; the bot runs on the same machine for now.
+- **CORS allows any origin**, so browser-based bots (e.g. Twitchat's HTTP trigger) can call it.
+  This is safe because auth is a bearer token, never a cookie: a page can only use a token it
+  was given. Preflights are answered before auth, and also allow Chrome's Private Network Access.
 - The bot will later move to a network server, so remote access is designed in from the start,
   not added later:
   - a bind address setting;
