@@ -3,13 +3,13 @@ import type {
   Recording,
   Resolution,
   SearchResult,
-  Source,
   YtmCollection,
   YtmCollectionDetail,
   YtmSong,
 } from '@halocline/core'
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js'
 import { call } from './bridge'
+import { contextMenu, type MenuItem } from './ContextMenu'
 import { bySourceOrder, sourceLabel } from './sources'
 import type { AppState } from './store'
 
@@ -106,6 +106,7 @@ export function Search(props: { state: AppState }) {
   const enqueueYtm = (song: YtmSong, position: 'next' | 'end') =>
     props.state.run(() => call('queue.addYtm', { song, position }))
   const saveYtm = (song: YtmSong) => props.state.run(() => call('library.saveYtm', { song }))
+  const radio = (seed: RadioSeed) => props.state.run(() => call('queue.radio', seed))
   const setStreamSafe = (recording: Recording, streamSafe: boolean) =>
     props.state.run(() => call('library.edit', { id: recording.id, changes: { streamSafe } }))
   const merge = (into: Recording, from: Recording) =>
@@ -113,11 +114,24 @@ export function Search(props: { state: AppState }) {
       await call('library.merge', { id: into.id, from: [from.id] })
       setMergeInto(null)
     })
-  // Merge and split live in one menu per row, to keep the row's buttons few.
-  const onMenu = (r: Recording, choice: string) => {
-    if (choice === 'merge') setMergeInto(r)
-    else if (choice)
-      void props.state.run(() => call('library.split', { id: r.id, sourceIds: [choice] }))
+  /**
+   * Fixes for matching (PLAN §3), on the right-click menu: merge a duplicate into
+   * this recording, or split a source that's a different song off onto its own.
+   */
+  const fixes = (r: Recording): MenuItem[] => {
+    const sources = sourcesOf().get(r.id) ?? []
+    return [
+      { label: 'Merge a duplicate into this…', action: () => setMergeInto(r) },
+      ...(sources.length > 1
+        ? bySourceOrder(sources).map((source) => ({
+            label: `Split off: ${sourceLabel(source, sources)}`,
+            action: () =>
+              void props.state.run(() =>
+                call('library.split', { id: r.id, sourceIds: [source.id] }),
+              ),
+          }))
+        : []),
+    ]
   }
   const allSafe = () => library().every((r) => r.streamSafe)
   const setAllStreamSafe = (streamSafe: boolean) => {
@@ -146,6 +160,7 @@ export function Search(props: { state: AppState }) {
           <LinkResult
             resolution={r()}
             enqueue={(input, position) => void enqueueInput(input, position)}
+            radio={(input) => void radio({ input })}
           />
         )}
       </Show>
@@ -156,6 +171,7 @@ export function Search(props: { state: AppState }) {
               collection={c()}
               state={props.state}
               enqueueSong={(song, position) => void enqueueYtm(song, position)}
+              radio={(song) => void radio({ song })}
             />
           </ul>
         )}
@@ -200,7 +216,20 @@ export function Search(props: { state: AppState }) {
           <ul class="list">
             <For each={library()}>
               {(r) => (
-                <li>
+                <li
+                  onContextMenu={contextMenu(() => [
+                    ...queueItems(
+                      (position) => void enqueue(r, position),
+                      () => void radio({ recordingId: r.id }),
+                    ),
+                    null,
+                    {
+                      label: r.streamSafe ? 'Unmark stream-safe' : 'Mark stream-safe',
+                      action: () => void setStreamSafe(r, !r.streamSafe),
+                    },
+                    ...fixes(r),
+                  ])}
+                >
                   <TrackLabel track={r} />
                   <span class="actions">
                     <Show when={cloudOnly(r.id)}>
@@ -218,21 +247,17 @@ export function Search(props: { state: AppState }) {
                     >
                       {r.streamSafe ? 'Safe ✓' : 'Safe?'}
                     </button>
-                    <button type="button" onClick={() => void enqueue(r, 'next')}>
+                    <button
+                      type="button"
+                      class="hover-only"
+                      onClick={() => void enqueue(r, 'next')}
+                    >
                       Next
                     </button>
-                    <button type="button" onClick={() => void enqueue(r, 'end')}>
+                    <button type="button" class="hover-only" onClick={() => void enqueue(r, 'end')}>
                       Add
                     </button>
-                    <Show
-                      when={mergeInto()}
-                      fallback={
-                        <RecordingMenu
-                          sources={sourcesOf().get(r.id) ?? []}
-                          onChoose={(choice) => onMenu(r, choice)}
-                        />
-                      }
-                    >
+                    <Show when={mergeInto()}>
                       {(into) => (
                         <Show
                           when={into().id !== r.id}
@@ -261,20 +286,38 @@ export function Search(props: { state: AppState }) {
           <ul class="list">
             <For each={cloud()}>
               {(song) => (
-                <li>
+                <li
+                  onContextMenu={contextMenu(() => [
+                    ...queueItems(
+                      (position) => void enqueueYtm(song, position),
+                      () => void radio({ song }),
+                    ),
+                    null,
+                    { label: 'Save to library', action: () => void saveYtm(song) },
+                  ])}
+                >
                   <TrackLabel track={song} />
                   <span class="actions">
                     <button
                       type="button"
+                      class="hover-only"
                       title="Save to your library"
                       onClick={() => void saveYtm(song)}
                     >
                       Save
                     </button>
-                    <button type="button" onClick={() => void enqueueYtm(song, 'next')}>
+                    <button
+                      type="button"
+                      class="hover-only"
+                      onClick={() => void enqueueYtm(song, 'next')}
+                    >
                       Next
                     </button>
-                    <button type="button" onClick={() => void enqueueYtm(song, 'end')}>
+                    <button
+                      type="button"
+                      class="hover-only"
+                      onClick={() => void enqueueYtm(song, 'end')}
+                    >
                       Add
                     </button>
                   </span>
@@ -294,6 +337,7 @@ export function Search(props: { state: AppState }) {
                   collection={c}
                   state={props.state}
                   enqueueSong={(song, position) => void enqueueYtm(song, position)}
+                  radio={(song) => void radio({ song })}
                 />
               )}
             </For>
@@ -304,34 +348,16 @@ export function Search(props: { state: AppState }) {
   )
 }
 
-/**
- * Fixes for matching (PLAN §3): merge a duplicate into this recording, or split a
- * source that's a different song off onto its own.
- */
-function RecordingMenu(props: { sources: Source[]; onChoose: (choice: string) => void }) {
-  return (
-    <select
-      class="more"
-      aria-label="More"
-      title="Merge a duplicate, or split off a source that's a different song"
-      value=""
-      onChange={(e) => {
-        const choice = e.currentTarget.value
-        e.currentTarget.value = ''
-        props.onChoose(choice)
-      }}
-    >
-      <option value="">⋯</option>
-      <option value="merge">Merge a duplicate into this…</option>
-      <Show when={props.sources.length > 1}>
-        <For each={bySourceOrder(props.sources)}>
-          {(source) => (
-            <option value={source.id}>Split off: {sourceLabel(source, props.sources)}</option>
-          )}
-        </For>
-      </Show>
-    </select>
-  )
+/** Search can start radio from a library recording, a YTM song or a link candidate. */
+type RadioSeed = { recordingId: string } | { song: YtmSong } | { input: string }
+
+/** Right-click items for any song: queue it, or start radio from it. */
+function queueItems(enqueue: (position: 'next' | 'end') => void, radio: () => void): MenuItem[] {
+  return [
+    { label: 'Play next', action: () => enqueue('next') },
+    { label: 'Add to queue', action: () => enqueue('end') },
+    { label: 'Start radio', action: radio },
+  ]
 }
 
 const collectionStates = new Map<string, ReturnType<typeof newCollectionState>>()
@@ -358,6 +384,7 @@ function CollectionRow(props: {
   collection: YtmCollection
   state: AppState
   enqueueSong: (song: YtmSong, position: 'next' | 'end') => void
+  radio: (song: YtmSong) => void
 }) {
   // Kept per album or playlist, not per row: the results are re-fetched (and the
   // rows rebuilt) whenever the library changes, e.g. right after "Add all".
@@ -382,7 +409,15 @@ function CollectionRow(props: {
     })
   return (
     <li class="collection">
-      <div class="collection-row">
+      <div
+        class="collection-row"
+        onContextMenu={contextMenu(() => [
+          { label: open() ? 'Hide tracks' : 'Show tracks', action: () => void toggle() },
+          null,
+          { label: 'Play next', action: () => void addAll('next') },
+          { label: 'Add all to queue', action: () => void addAll('end') },
+        ])}
+      >
         <TrackLabel
           track={{
             title: props.collection.title,
@@ -397,6 +432,7 @@ function CollectionRow(props: {
           </button>
           <button
             type="button"
+            class="hover-only"
             title={`Play this ${kind().toLowerCase()} next`}
             onClick={() => void addAll('next')}
           >
@@ -404,6 +440,7 @@ function CollectionRow(props: {
           </button>
           <button
             type="button"
+            class="hover-only"
             title={`Add the whole ${kind().toLowerCase()} to the queue`}
             onClick={() => void addAll('end')}
           >
@@ -417,13 +454,28 @@ function CollectionRow(props: {
           <ol class="list tracks">
             <For each={d().songs} fallback={<li class="empty">No playable tracks.</li>}>
               {(song) => (
-                <li>
+                <li
+                  onContextMenu={contextMenu(() =>
+                    queueItems(
+                      (position) => props.enqueueSong(song, position),
+                      () => props.radio(song),
+                    ),
+                  )}
+                >
                   <TrackLabel track={song} />
                   <span class="actions">
-                    <button type="button" onClick={() => props.enqueueSong(song, 'next')}>
+                    <button
+                      type="button"
+                      class="hover-only"
+                      onClick={() => props.enqueueSong(song, 'next')}
+                    >
                       Next
                     </button>
-                    <button type="button" onClick={() => props.enqueueSong(song, 'end')}>
+                    <button
+                      type="button"
+                      class="hover-only"
+                      onClick={() => props.enqueueSong(song, 'end')}
+                    >
                       Add
                     </button>
                   </span>
@@ -452,6 +504,7 @@ const PROVIDERS: Record<LinkProvider, string> = {
 function LinkResult(props: {
   resolution: Resolution
   enqueue: (input: string, position: 'next' | 'end') => void
+  radio: (input: string) => void
 }) {
   const link = () => props.resolution.link
   return (
@@ -477,17 +530,33 @@ function LinkResult(props: {
       <ul class="list">
         <For each={props.resolution.candidates}>
           {(c) => (
-            <li classList={{ best: c.input === props.resolution.match?.input }}>
+            <li
+              classList={{ best: c.input === props.resolution.match?.input }}
+              onContextMenu={contextMenu(() =>
+                queueItems(
+                  (position) => props.enqueue(c.input, position),
+                  () => props.radio(c.input),
+                ),
+              )}
+            >
               <TrackLabel track={c} />
               <span class="actions">
                 <span class="badge" title="How sure the match is">
                   {c.source === 'library' ? 'library' : 'YouTube Music'}
                   {c.score ? ` · ${Math.round(c.score * 100)}%` : ''}
                 </span>
-                <button type="button" onClick={() => props.enqueue(c.input, 'next')}>
+                <button
+                  type="button"
+                  class="hover-only"
+                  onClick={() => props.enqueue(c.input, 'next')}
+                >
                   Next
                 </button>
-                <button type="button" onClick={() => props.enqueue(c.input, 'end')}>
+                <button
+                  type="button"
+                  class="hover-only"
+                  onClick={() => props.enqueue(c.input, 'end')}
+                >
                   Add
                 </button>
               </span>
@@ -511,9 +580,11 @@ interface TrackInfo {
 const artworkSrc = (artwork: string) =>
   artwork.startsWith('https://') ? artwork : `artwork://${artwork}`
 
-export function Artwork(props: { track: TrackInfo; size: number }) {
+/** `size` in pixels, or any CSS length. */
+export function Artwork(props: { track: TrackInfo; size: number | string }) {
+  const size = () => (typeof props.size === 'number' ? `${props.size}px` : props.size)
   return (
-    <span class="art" style={{ width: `${props.size}px`, height: `${props.size}px` }}>
+    <span class="art" style={{ width: size(), height: size() }}>
       <Show when={props.track.artwork}>
         {(artwork) => <img src={artworkSrc(artwork())} alt="" loading="lazy" />}
       </Show>

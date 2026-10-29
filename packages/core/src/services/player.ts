@@ -113,6 +113,7 @@ export class PlayerService {
       playing: false,
       positionMs: 0,
       positionAt: this.now(),
+      pausedAt: this.now(),
       volume: options.volume?.get() ?? 0.8,
       repeat: 'off',
       shuffle: false,
@@ -466,7 +467,10 @@ export class PlayerService {
   }
 
   private update(changes: Partial<PlayerState>, trackChanged = false): void {
-    this.state = { ...this.state, ...changes }
+    const was = this.state
+    this.state = { ...was, ...changes }
+    if (this.state.playing) this.state.pausedAt = null
+    else if (was.playing || was.pausedAt === null) this.state.pausedAt = this.now()
     // Play history: the History page, and autoplay (PLAN §7) avoids recent artists and songs.
     if (trackChanged && this.current) {
       this.library.markPlayed(this.current.recordingId, new Date(), {

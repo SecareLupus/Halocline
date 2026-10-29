@@ -12,10 +12,10 @@ import { DomainError } from '../errors'
 import type { EventBus } from '../events'
 import { normalizeArtist, sameRecording, songTitle } from '../library/match'
 import type { YtmCatalog } from '../providers/ytm'
-import type { Recording, Settings, YtmSong } from '../schemas'
+import type { QueueItem, Recording, Settings, YtmSong } from '../schemas'
 import type { AnalysisService } from './analysis'
 import type { LibraryService } from './library'
-import type { QueueService } from './queue'
+import type { AddToQueue, QueueService } from './queue'
 import type { SettingsService } from './settings'
 
 /** A song autoplay might add: a recording, or a YTM song not in the database yet. */
@@ -42,6 +42,10 @@ const LIBRARY_CANDIDATES = 50
 export class AutoplayService {
   private running: Promise<void> | null = null
   private followUp: Promise<void> | null = null
+  /** Set by Start radio: the next fill runs whether autoplay is on or not. */
+  private forced = false
+  /** Bumped when the queue is replaced, so a fill for the old seed adds nothing. */
+  private generation = 0
   private readonly unsubscribe: () => void
   /** The YTM song for a recording with no YTM source, found by search once. */
   private readonly radioSeeds = new Map<string, string | null>()
@@ -82,6 +86,27 @@ export class AutoplayService {
   }
 
   /**
+   * Start radio: replaces the queue with one song, then fills it up to "Keep queued"
+   * with songs like it, whether autoplay is on or not.
+   */
+  async startRadio(input: Omit<AddToQueue, 'position'>): Promise<QueueItem> {
+    // Set before the queue changes: its event starts a fill straight away.
+    this.generation++
+    this.forced = true
+    let item: QueueItem
+    try {
+      item = this.queue.replace(input)
+    } catch (err) {
+      // Nothing changed, so a fill already under way is still good.
+      this.generation--
+      this.forced = false
+      throw err
+    }
+    await this.check()
+    return item
+  }
+
+  /**
    * Tops the queue up if autoplay is on and the queue is short. Resolves when done.
    * A call during a fill gets one more fill after it, which sees the change that
    * prompted the call; calls during that wait share it.
@@ -103,14 +128,17 @@ export class AutoplayService {
     return this.running
   }
 
-  private needed(settings: Settings): number {
-    if (!settings.autoplay.enabled || this.options.repeating?.()) return 0
+  private needed(settings: Settings, forced = false): number {
+    if (!forced && (!settings.autoplay.enabled || this.options.repeating?.())) return 0
     return settings.autoplay.minQueueLength - this.queue.list().items.length
   }
 
   private async fill(): Promise<void> {
+    const forced = this.forced
+    this.forced = false
+    const generation = this.generation
     const settings = this.settings.get()
-    if (this.needed(settings) <= 0) return
+    if (this.needed(settings, forced) <= 0) return
     const { artistGap } = settings.autoplay
     // The song playing is the latest played: plays are counted when a track starts.
     const history = this.library.recentlyPlayed(Math.max(artistGap, 1))
@@ -122,9 +150,11 @@ export class AutoplayService {
     const around = [...history, ...queued].filter((r) => r.id !== seed.id)
 
     const candidates = await this.candidates(seed, around, settings)
+    // Start radio replaced the queue while YTM answered: these follow the old seed.
+    if (generation !== this.generation) return
     const chosen: Candidate[] = []
     // The queue may have changed while YTM answered.
-    for (let n = this.needed(this.settings.get()); n > 0; n--) {
+    for (let n = this.needed(this.settings.get(), forced); n > 0; n--) {
       // A new song goes after everything queued, so queued songs count as the ones
       // just before it: what's played, then what's waiting, in play order.
       const played = history.slice(0, Math.max(artistGap, 1)).reverse()

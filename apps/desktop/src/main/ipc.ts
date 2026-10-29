@@ -148,6 +148,23 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
       const { id, sourceId } = z.object({ id: Id, sourceId: Id.nullable() }).parse(a)
       return core.queue.pinSource(id, sourceId)
     },
+    'queue.radio': async (a) => {
+      const args = z
+        .union([
+          z.object({ recordingId: Id }),
+          z.object({ song: YtmSong }),
+          z.object({ input: z.string().min(1).max(2000) }),
+        ])
+        .parse(a)
+      const recording =
+        'recordingId' in args
+          ? core.library.require(args.recordingId)
+          : 'song' in args
+            ? core.catalog.addYtmSong(args.song)
+            : await core.catalog.resolve(args.input)
+      await core.autoplay.startRadio({ recordingId: recording.id, origin: 'user' })
+      return core.queue.list()
+    },
     'library.saveYtm': (a) => core.catalog.saveYtmSong(z.object({ song: YtmSong }).parse(a).song),
     'player.get': () => core.player.get(),
     'player.output': () => core.player.getOutput(),

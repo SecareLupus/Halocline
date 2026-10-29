@@ -146,6 +146,26 @@ describe('queue', () => {
     expect((await json(res)).type).toBe('stream_safe_violation')
   })
 
+  it('starts radio: replaces the queue and fills it, with queue:manage only', async () => {
+    const token = tokenFor('queue:manage', 'read')
+    const [a, b, c] = ['Alpha', 'Bravo', 'Charlie'].map((t) => song(t))
+    core.settings.patch({ autoplay: { enabled: false } })
+    await call('POST', '/v1/queue/items', { token, body: { input: a!.id } })
+    const denied = await call('POST', '/v1/queue/radio', {
+      token: tokenFor('queue:add'),
+      body: { input: c!.id },
+    })
+    expect(denied.status).toBe(403)
+
+    const res = await call('POST', '/v1/queue/radio', { token, body: { input: c!.id } })
+    expect(res.status).toBe(200)
+    const queue = await json(res)
+    expect(queue.items).toHaveLength(2)
+    expect(queue.items[0]).toMatchObject({ origin: 'api', recording: { title: 'Charlie' } })
+    expect(queue.items[1]).toMatchObject({ origin: 'autoplay' })
+    expect([a!.id, b!.id]).toContain(queue.items[1].recordingId)
+  })
+
   it('moves and deletes items by id', async () => {
     const token = tokenFor('queue:manage', 'read')
     const ids: string[] = []

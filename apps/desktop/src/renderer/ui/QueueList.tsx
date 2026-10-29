@@ -1,6 +1,7 @@
 import type { QueuePosition } from '@halocline/core'
 import { createSignal, For, Show } from 'solid-js'
 import { call } from './bridge'
+import { contextMenu } from './ContextMenu'
 import { TrackLabel } from './Search'
 import { bySourceOrder, sourceLabel } from './sources'
 import type { AppState } from './store'
@@ -34,6 +35,7 @@ export function QueueList(props: { state: AppState }) {
         : 'next'
     void props.state.run(() => call('queue.move', { id, position }))
   }
+  const remove = (id: string) => void props.state.run(() => call('queue.remove', { id }))
 
   return (
     <section class="pane">
@@ -91,6 +93,17 @@ export function QueueList(props: { state: AppState }) {
                   }
                 }}
                 onDrop={(e) => drop(item.id, half(e))}
+                onContextMenu={contextMenu(() => [
+                  {
+                    label: 'Play next',
+                    disabled: items()[0]?.id === item.id,
+                    action: () =>
+                      void props.state.run(() =>
+                        call('queue.move', { id: item.id, position: 'next' }),
+                      ),
+                  },
+                  { label: 'Remove from queue', action: () => remove(item.id) },
+                ])}
               >
                 <TrackLabel track={item.recording} />
                 <span class="actions">
@@ -132,10 +145,9 @@ export function QueueList(props: { state: AppState }) {
                   </Show>
                   <button
                     type="button"
+                    class="hover-only"
                     aria-label="Remove"
-                    onClick={() =>
-                      void props.state.run(() => call('queue.remove', { id: item.id }))
-                    }
+                    onClick={() => remove(item.id)}
                   >
                     ✕
                   </button>

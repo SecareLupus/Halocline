@@ -89,6 +89,11 @@ export interface IpcHandlers {
   'queue.remove': (args: { id: string }) => void
   /** Pins a queue item to one source, or back to automatic with `null` (PLAN §3). */
   'queue.pin': (args: { id: string; sourceId: string | null }) => QueueItem
+  /**
+   * Start radio: clears the queue, queues this song, then fills up to "Keep queued"
+   * with songs like it, whether autoplay is on or not.
+   */
+  'queue.radio': (args: { recordingId: string } | { song: YtmSong } | { input: string }) => Queue
   /** Saves a YouTube Music song to the library. */
   'library.saveYtm': (args: { song: YtmSong }) => Recording
   'player.get': () => PlayerState

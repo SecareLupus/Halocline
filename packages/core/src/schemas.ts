@@ -300,6 +300,11 @@ export const PlayerState = z.object({
   /** Position at the moment `positionAt` (epoch ms); clients extrapolate between events. */
   positionMs: z.number().int().nonnegative(),
   positionAt: z.number().int(),
+  /**
+   * When playback last stopped or paused (epoch ms); null while playing. A long
+   * pause reads as stopped: the overlay hides after five minutes (PLAN §8).
+   */
+  pausedAt: z.number().int().nullable(),
   volume: z.number().min(0).max(1),
   repeat: RepeatMode,
   /** The next song is a random one from the queue rather than the first. */
@@ -387,14 +392,33 @@ export const Settings = z.object({
 })
 export type Settings = z.infer<typeof Settings>
 
+type PatchShape<S extends z.ZodRawShape> = {
+  [K in keyof S]: z.ZodOptional<S[K] extends z.ZodDefault<infer T> ? T : S[K]>
+}
+
+/**
+ * A settings group with every field optional and no defaults. `.partial()` alone
+ * keeps the defaults, so parsing `{ enabled: true }` would reset the group's other
+ * fields to theirs.
+ */
+function patchOf<S extends z.ZodRawShape>(group: z.ZodObject<S>) {
+  const shape = Object.fromEntries(
+    Object.entries(group.shape).map(([key, field]) => [
+      key,
+      ((field instanceof z.ZodDefault ? field.unwrap() : field) as z.ZodType).optional(),
+    ]),
+  )
+  return z.object(shape as unknown as PatchShape<S>)
+}
+
 export const SettingsPatch = z
   .object({
     streamSafeMode: z.boolean(),
-    autoplay: Settings.shape.autoplay.unwrap().partial(),
-    api: Settings.shape.api.unwrap().partial(),
-    playback: Settings.shape.playback.unwrap().partial(),
-    library: Settings.shape.library.unwrap().partial(),
-    analysis: Settings.shape.analysis.unwrap().partial(),
+    autoplay: patchOf(Settings.shape.autoplay.unwrap()),
+    api: patchOf(Settings.shape.api.unwrap()),
+    playback: patchOf(Settings.shape.playback.unwrap()),
+    library: patchOf(Settings.shape.library.unwrap()),
+    analysis: patchOf(Settings.shape.analysis.unwrap()),
   })
   .partial()
   .strict()

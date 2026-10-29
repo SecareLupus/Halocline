@@ -56,14 +56,7 @@ export class QueueService {
   }
 
   add(input: AddToQueue): QueueItem {
-    const recording = this.library.require(input.recordingId)
-    if (this.settings.get().streamSafeMode && !recording.streamSafe) {
-      throw new DomainError(
-        'stream_safe_violation',
-        `"${recording.title}" is not tagged stream-safe`,
-        { recordingId: recording.id },
-      )
-    }
+    const recording = this.playable(input.recordingId)
     const id = randomUUID()
     this.mutate(input.expectedRevision, () => {
       const position = this.insertionIndex(input.position ?? 'end')
@@ -186,6 +179,30 @@ export class QueueService {
     })
   }
 
+  /** Empties the queue and adds one recording, as one change (Start radio). */
+  replace(input: Omit<AddToQueue, 'position'>): QueueItem {
+    const recording = this.playable(input.recordingId)
+    const id = randomUUID()
+    this.mutate(input.expectedRevision, () => {
+      this.db.prepare('DELETE FROM queue_items').run()
+      this.db
+        .prepare(
+          `INSERT INTO queue_items
+             (id, recording_id, origin, requested_by, added_at, position, pinned_source_id)
+           VALUES (?, ?, ?, ?, ?, 0, ?)`,
+        )
+        .run(
+          id,
+          recording.id,
+          input.origin,
+          input.requestedBy ?? null,
+          new Date().toISOString(),
+          input.pinnedSourceId ?? null,
+        )
+    })
+    return this.get(id)
+  }
+
   clear(expectedRevision?: number): void {
     this.mutate(expectedRevision, () => {
       this.db.prepare('DELETE FROM queue_items').run()
@@ -207,6 +224,19 @@ export class QueueService {
     const item = this.toItem(row)
     this.remove(row.id)
     return item
+  }
+
+  /** The recording, if stream-safe mode lets it be queued. */
+  private playable(recordingId: string) {
+    const recording = this.library.require(recordingId)
+    if (this.settings.get().streamSafeMode && !recording.streamSafe) {
+      throw new DomainError(
+        'stream_safe_violation',
+        `"${recording.title}" is not tagged stream-safe`,
+        { recordingId: recording.id },
+      )
+    }
+    return recording
   }
 
   private mutate(expectedRevision: number | undefined, change: () => void): void {

@@ -1,6 +1,7 @@
 import type { HistoryEntry } from '@halocline/core'
 import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from 'solid-js'
 import { call } from './bridge'
+import { contextMenu } from './ContextMenu'
 import { TrackLabel } from './Search'
 import type { AppState } from './store'
 
@@ -92,6 +93,8 @@ export function History(props: { state: AppState }) {
     props.state.run(() => call('queue.add', { recordingId: entry.recording.id, position }))
   const edit = (entry: HistoryEntry, changes: { streamSafe?: boolean; inLibrary?: boolean }) =>
     props.state.run(() => call('library.edit', { id: entry.recording.id, changes }))
+  const radio = (entry: HistoryEntry) =>
+    props.state.run(() => call('queue.radio', { recordingId: entry.recording.id }))
 
   return (
     <section class="pane history">
@@ -119,31 +122,54 @@ export function History(props: { state: AppState }) {
               <ul class="list">
                 <For each={group.entries}>
                   {(entry) => (
-                    <li>
+                    <li
+                      onContextMenu={contextMenu(() => [
+                        { label: 'Play next', action: () => void enqueue(entry, 'next') },
+                        { label: 'Add to queue', action: () => void enqueue(entry, 'end') },
+                        { label: 'Start radio', action: () => void radio(entry) },
+                        null,
+                        entry.recording.inLibrary
+                          ? null
+                          : {
+                              label: 'Save to library',
+                              action: () => void edit(entry, { inLibrary: true }),
+                            },
+                        {
+                          label: entry.recording.streamSafe
+                            ? 'Unmark stream-safe'
+                            : 'Mark stream-safe',
+                          action: () =>
+                            void edit(entry, { streamSafe: !entry.recording.streamSafe }),
+                        },
+                      ])}
+                    >
                       <span class="played-at">{timeLabel(entry.playedAt)}</span>
                       <TrackLabel track={entry.recording} />
                       <span class="actions">
-                        <Show when={entry.origin && entry.origin !== 'user'}>
-                          <span class="badge" title="How it was queued">
-                            {entry.requestedBy ?? entry.origin}
-                          </span>
-                        </Show>
-                        <Show when={entry.engine}>
-                          {(engine) => (
-                            <span class={`badge engine-${engine()}`} title="Played from">
-                              {engine()}
-                            </span>
-                          )}
-                        </Show>
                         <Show when={!entry.recording.inLibrary}>
                           <button
                             type="button"
+                            class="hover-only"
                             title="Save to your library"
                             onClick={() => void edit(entry, { inLibrary: true })}
                           >
                             Save
                           </button>
                         </Show>
+                        <button
+                          type="button"
+                          class="hover-only"
+                          onClick={() => void enqueue(entry, 'next')}
+                        >
+                          Next
+                        </button>
+                        <button
+                          type="button"
+                          class="hover-only"
+                          onClick={() => void enqueue(entry, 'end')}
+                        >
+                          Add
+                        </button>
                         <button
                           type="button"
                           class="safe-toggle"
@@ -160,12 +186,26 @@ export function History(props: { state: AppState }) {
                         >
                           {entry.recording.streamSafe ? 'Safe ✓' : 'Safe?'}
                         </button>
-                        <button type="button" onClick={() => void enqueue(entry, 'next')}>
-                          Next
-                        </button>
-                        <button type="button" onClick={() => void enqueue(entry, 'end')}>
-                          Add
-                        </button>
+                      </span>
+                      {/* Stacked in a column of fixed width, so every row lines up
+                          however many a song has. More than three would need a "…"
+                          with the rest on hover (PLAN §11). */}
+                      <span class="tags">
+                        <Show when={entry.origin && entry.origin !== 'user'}>
+                          <span
+                            class="badge"
+                            title={`Queued by ${entry.requestedBy ?? entry.origin}`}
+                          >
+                            {entry.requestedBy ?? entry.origin}
+                          </span>
+                        </Show>
+                        <Show when={entry.engine}>
+                          {(engine) => (
+                            <span class={`badge engine-${engine()}`} title="Played from">
+                              {engine()}
+                            </span>
+                          )}
+                        </Show>
                       </span>
                     </li>
                   )}

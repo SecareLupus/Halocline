@@ -20,5 +20,6 @@ describe('API docs', () => {
     expect(script.headers.get('content-type')).toContain('javascript')
     expect((await script.text()).length).toBeGreaterThan(100_000)
     expect(await (await app.request('/docs/init.js')).text()).toContain("url: '/openapi.json'")
+    expect((await app.request('/')).headers.get('location')).toBe('/docs')
   })
 })

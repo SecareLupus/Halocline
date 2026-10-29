@@ -48,6 +48,8 @@ export function registerDocs(app: OpenAPIHono<ApiEnv>): void {
     })
   app.get('/docs', send(PAGE, 'text/html; charset=utf-8'))
   app.get('/docs/', (c) => c.redirect('/docs'))
+  // The server's own address (Settings → API links to it) opens the docs.
+  app.get('/', (c) => c.redirect('/docs'))
   app.get('/docs/swagger-ui.css', send(swaggerCss, 'text/css; charset=utf-8'))
   app.get('/docs/swagger-ui-bundle.js', send(swaggerJs, 'text/javascript; charset=utf-8'))
   app.get('/docs/init.js', send(INIT, 'text/javascript; charset=utf-8'))

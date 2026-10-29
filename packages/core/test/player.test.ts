@@ -48,6 +48,27 @@ describe('PlayerService', () => {
     expect(sent.at(-1)).toEqual({ type: 'stop' })
   })
 
+  it('says when it paused, so a long pause can read as stopped', () => {
+    vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] })
+    try {
+      const { enqueue } = setup()
+      enqueue('A')
+      core.player.patch({ playing: true })
+      expect(core.player.get().pausedAt).toBeNull()
+      vi.setSystemTime(2_000_000)
+      core.player.patch({ playing: false })
+      expect(core.player.get().pausedAt).toBe(2_000_000)
+      // Reports while paused don't restart the clock.
+      vi.setSystemTime(3_000_000)
+      core.player.report({ type: 'progress', positionMs: 5_000, playing: false })
+      expect(core.player.get().pausedAt).toBe(2_000_000)
+      core.player.patch({ playing: true })
+      expect(core.player.get().pausedAt).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('fails over from direct to fallback within the same track', () => {
     const { enqueue, loads } = setup()
     enqueue('Cloud', 'ytm')

@@ -22,6 +22,8 @@ const AddItem = z.object({
   requestedBy: z.string().max(100).optional(),
 })
 
+const RadioSeed = AddItem.omit({ position: true })
+
 const AddCollection = z.object({
   /**
    * `ytm-album:<browseId>` or `ytm-playlist:<playlistId>` from search results, or a
@@ -179,6 +181,46 @@ export function registerQueue(app: OpenAPIHono<ApiEnv>, core: Core) {
       })
       c.header('ETag', `"${core.queue.revision}"`)
       return c.json(item, 201)
+    },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/queue/radio',
+      tags: ['queue'],
+      summary: 'Start radio from a song',
+      description:
+        'Clears the queue, queues the song, then adds songs like it up to the autoplay ' +
+        'setting "Keep queued" (`autoplay.minQueueLength`), whether autoplay is on or not. ' +
+        'The song playing now keeps playing.',
+      middleware: [requireScope('queue:manage')],
+      request: {
+        headers: ifMatchHeader,
+        body: { content: { 'application/json': { schema: RadioSeed } }, required: true },
+      },
+      responses: {
+        200: { description: 'The new queue', content: { 'application/json': { schema: Queue } } },
+        ...authErrors,
+        404: errorResponse('Nothing matched'),
+        409: errorResponse('stream_safe_violation'),
+        412: errorResponse('revision_mismatch'),
+        422: errorResponse('`match_ambiguous`: as for `POST /v1/queue/items`'),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid('json')
+      const recording = await core.catalog.resolve(body.input)
+      const revision = expectedRevision(c)
+      await core.autoplay.startRadio({
+        recordingId: recording.id,
+        origin: 'api',
+        ...(body.requestedBy !== undefined && { requestedBy: body.requestedBy }),
+        ...(revision !== undefined && { expectedRevision: revision }),
+      })
+      const queue = core.queue.list()
+      c.header('ETag', `"${queue.revision}"`)
+      return c.json(queue, 200)
     },
   )
 

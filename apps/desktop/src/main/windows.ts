@@ -14,7 +14,7 @@ export function createUiWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1100,
     height: 720,
-    minWidth: 720,
+    minWidth: 420,
     minHeight: 480,
     title: 'Halocline',
     // Installers carry the icon themselves; this shows it on Linux taskbars and in dev.

@@ -129,7 +129,7 @@ Phase 3 as built:
 - **Pinning:** queue items carry their `sources`, and the queue shows a "Play from" menu (Auto,
   Local file, YouTube Music) when there's more than one.
 - **Merging and splitting by hand,** for when matching gets it wrong. In the UI, both are in a
-  library row's "⋯" menu. In the API, `POST /v1/library/recordings/{id}/merge` and `…/split`.
+  library row's right-click menu. In the API, `POST /v1/library/recordings/{id}/merge` and `…/split`.
   - **Merge** duplicates into one recording:
     - their sources (two files of the same song are allowed) and audio analysis move over;
     - missing details are filled in;
@@ -147,9 +147,21 @@ Phase 3 as built:
 
 - **History** (the History button beside Settings): a `plays` table gets a row per track start,
   with the engine, the queue origin and the requester. The migration seeded it with each
-  recording's last play. Merges carry plays over. The page groups plays by day, pages back 50 at a
-  time, offers Next, Add, Save and stream-safe on each, and can be cleared (play counts stay, since
-  autoplay uses them). The search pane stays mounted underneath, so its results survive.
+  recording's last play. Merges carry plays over. The page fills the window, like Settings. It
+  groups plays by day, pages back 50 at a time, offers Next, Add, Save and stream-safe on each, and
+  can be cleared (play counts stay, since autoplay uses them). Each row's tags (how it was queued,
+  the engine) stack in a fixed-width column, so rows line up however many a song has. The search
+  pane stays mounted underneath, so its results survive.
+
+- **Window layout** (`renderer/ui`): search beside the queue, with a draggable split (remembered,
+  double-click to centre). Below 720 px wide they stack, search over the queue, and the player
+  bar moves shuffle and repeat into a column with the volume. The window goes down to 420 px.
+  - Row buttons are only Save, Next, Add (and ✕ in the queue), shown on the row under the pointer
+    or in focus. Anything more goes on the row's right-click menu, never another button. Every
+    row's menu repeats its buttons' actions too; songs in search and
+    history add **Start radio** (§7).
+  - Clicking the bar's art opens the **player view**: big art, progress and controls, the queue
+    below, no search. The faint ⌄ in its corner (or Escape) goes back.
 
 Storage:
 - SQLite (`better-sqlite3`) with FTS5 over title, artist and album.
@@ -320,7 +332,8 @@ As built (`packages/core/src/resolve/`):
 The API is designed for this app from the ground up. It's an HTTP JSON API with a
 Server-Sent Events stream, and its OpenAPI 3.1 document is generated from the same zod schemas
 the domain layer uses (Hono + `@hono/zod-openapi`, with interactive docs served by the app).
-As built: Swagger UI at `/docs` (linked from Settings → API), from `swagger-ui-dist` bundled into
+As built: Swagger UI at `/docs` (linked from Settings → API, as is the server's address, which
+redirects there), from `swagger-ui-dist` bundled into
 the app rather than a CDN, so it works offline under a strict CSP. Reading needs no token;
 **Authorize** takes an API token for **Try it out**.
 
@@ -346,6 +359,7 @@ the app rather than a CDN, so it works offline under a strict CSP. Reading needs
 | `POST /v1/queue/items` | `{ input: url \| query \| recordingId, position: next \| end \| {after: itemId}, requestedBy? }`. Resolves and enqueues in one call. `201` on success, `409 stream_safe_violation`, `422 match_ambiguous` with candidates |
 | `PATCH /v1/queue/items/{id}` | move or pin a source |
 | `DELETE /v1/queue/items/{id}` · `DELETE /v1/queue/items` | remove or clear |
+| `POST /v1/queue/radio` | `{ input, requestedBy? }`: Start radio (§7). Clears the queue, queues the song, fills to "Keep queued" whatever the autoplay switch says, and returns the new queue (`queue:manage`) |
 | `GET /v1/search?q=&scope=library\|ytm\|all` | unified results; each carries `recordingId` (or a provider ref) and its available sources. YTM albums and playlists come last (`ytm-collection`, up to four of each) |
 | `GET /v1/collections/{ref}` · `POST /v1/queue/collections` | an album's or playlist's tracks (`ytm-album:…`, `ytm-playlist:…`; playlists cut at 500); enqueue all of it in order, as one change. `POST` also takes a YouTube Music album or playlist link (an album's Share link, `playlist?list=OLAK5uy_…`, is looked up as the album). YouTube Music's playlist page names no owner, so a playlist opened this way is described by its tracks' artists ("Daft Punk", or "Daft Punk, Justice & 12 more"). In stream-safe mode untagged songs are left out and counted in `skipped`. `POST /v1/queue/items` refuses such links with a pointer here |
 | `POST /v1/resolve` | link to a match or candidates, without enqueueing |
@@ -464,7 +478,13 @@ audio analysis, scored as "tracks without features" above.
 - **Pick:** from the top 2–20 (by adventurousness), with odds flattening as adventurousness
   rises.
 - **Settings:** on/off, songs to keep queued, sources, adventurousness, artist gap, recent hours.
-  They're part of `GET`/`PATCH /v1/settings`, and Settings → Autoplay in the UI.
+  They're part of `GET`/`PATCH /v1/settings`, and Settings → Autoplay in the UI. Turning autoplay
+  off leaves the others as they are, and they can still be changed. (A settings patch changes only
+  the fields it names; parsing used to fill the rest of a group with defaults.)
+- **Start radio** (`AutoplayService.startRadio`, `POST /v1/queue/radio`, right-click → Start
+  radio): replaces the queue with one song, as one change, then fills it to "Keep queued" from
+  that song, whether autoplay is on or not (and on repeat too). The song playing keeps playing.
+  A fill already under way for the old queue is dropped.
 
 Phase 5, second part, as built: audio analysis. The Essentia plan above changed after two
 findings. Essentia's Python packages are published for Linux and macOS only, and its pretrained
@@ -528,14 +548,17 @@ the source is set to. Recommended size: 375×140.
 █████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ← progress bar
 ```
 
-- **Progress bar:** the full width of the source, along the bottom edge.
+- **Progress bar:** the full width of the source, along the bottom edge, 10 px tall. The whole
+  track always shows (dark and translucent with a light edge, so it reads on any scene); the
+  played part fills in seafoam, Halocline's accent.
 - **Album art:** a square pushed all the way left. It fills the height from the top of the source
   to the top of the bar, up to the layout's design height (140 px less the bar,
   `--hl-art-max-size`), so a tall source doesn't blow it up.
 - **Text:** two rows to the right of the art, vertically centered above the bar.
   - Row 1 is **Artist**; multiple artists are joined with ", ".
   - Row 2 is **Song Title**.
-  - Each row is a single line, cut off with an ellipsis if too long.
+  - Each row is a single line. A row too long for it shrinks to fit, down to
+    `--hl-min-font-scale` (0.75) of its size, before an ellipsis cuts it off.
   - Font size scales with the source height, and with the width for narrow sources
     (`--hl-font-size` overrides it).
 
@@ -546,16 +569,24 @@ the source is set to. Recommended size: 375×140.
 - **Progress:** events carry `positionMs` plus a timestamp, and the page moves the bar forward
   locally between events. It stays smooth with no per-frame events, and resyncs on every event
   (seeks included).
-- **Paused:** the bar freezes and the overlay stays visible.
+- **Paused:** the bar freezes and its fill turns grey; the art darkens under a white pause sign.
+  The song and its progress stay.
+- **Stopped:** paused for more than five minutes reads as stopped, and the overlay fades out. That
+  covers the start of a stream (Halocline has been idle at least that long) without a switch to
+  remember; guessing wrong only hides the overlay early. `PlayerState.pausedAt` (when playback
+  paused, null while playing) lets a page loaded mid-pause tell how long it's been.
 - **Track change:** art and text cross-fade (about 300 ms).
 - **Nothing playing, or a fallback-engine ad:** the whole overlay fades out.
+- **Panel:** art and text sit on a dark panel at 70% opacity, so the scene shows through faintly
+  while the text stays legible. Art and text are fully opaque.
 - **Missing art:** a neutral placeholder.
 
 **Restyling without an editor:**
 - Elements have stable class names, and colours, fonts and sizes are CSS custom properties
-  (`--hl-font`, `--hl-text-color`, `--hl-bar-color`, `--hl-bar-track-color`, `--hl-bar-height`,
-  `--hl-art-max-size`, `--hl-gap`). The bar's track is translucent dark under a white fill, so
-  the fill's edge shows on light and dark scenes.
+  (`--hl-font`, `--hl-text-color`, `--hl-bar-color`, `--hl-bar-track-color`,
+  `--hl-bar-edge-color`, `--hl-bar-height`, `--hl-bar-paused-color`, `--hl-panel-color`,
+  `--hl-paused-art-shade`, `--hl-pause-sign-color`, `--hl-art-max-size`, `--hl-gap`,
+  `--hl-min-font-scale`).
 - OBS's Browser Source has a **Custom CSS** field, so these can be overridden per scene without
   touching Halocline.
 
@@ -682,6 +713,15 @@ Each attaches through the §8 extension points.
 4. **Visualizer widget:** needs frequency data streamed from Halocline over WebSocket.
 
 **Other:**
+- **Autoplay blocklist:** block artists, songs or albums from autoplay (and Start radio), separate
+  from stream-safe. Blocked songs still show in search and can be queued by hand. Needs a page to
+  view and edit the blocks, and probably a right-click "Don't autoplay this artist/song/album".
+- **Analysis details:** a page listing the songs analysed and their measurements (tempo, key,
+  energy, loudness, failures), linked from "X of Y analyzed" in Settings → Audio analysis.
+- **History tags past three:** the tag column (§3, History) fits three. A fourth would show the
+  third as "…", with the rest on hover. Not needed until a song can carry more than three.
+- **Pause note (idea):** an optional short status for a pause ("Be right back", "Q&A"), set from
+  the app or a bot, shown on the overlay in place of the pause sign or beside it. Not decided.
 - Twitch chat song requests (`!sr <link|query>`): built on a `queue:add`-scoped token, with
   per-user limits, mod approval, vote-to-skip, and stream-safe enforcement.
 - More providers: SoundCloud, Bandcamp, Subsonic/Navidrome, Tidal, Deezer.

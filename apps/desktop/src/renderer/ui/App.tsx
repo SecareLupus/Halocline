@@ -1,16 +1,33 @@
-import { createSignal, Show } from 'solid-js'
+import { createSignal, Match, onCleanup, Show, Switch } from 'solid-js'
+import { ContextMenuHost } from './ContextMenu'
 import { History } from './History'
 import { NowPlaying } from './NowPlaying'
+import { PlayerView } from './PlayerView'
 import { QueueList } from './QueueList'
 import { Search } from './Search'
 import { SettingsPanel } from './SettingsPanel'
+import { createSplit, Splitter } from './Splitter'
 import { createAppState } from './store'
+
+/** Narrower than this, search and the queue stack, and the player bar gets compact. */
+const STACKED = '(max-width: 719px)'
+
+type View = 'main' | 'history' | 'settings' | 'player'
 
 export function App() {
   const state = createAppState()
-  const [showSettings, setShowSettings] = createSignal(false)
-  /** The left pane: search, or the play history. The queue stays on the right. */
-  const [showHistory, setShowHistory] = createSignal(false)
+  /** Search beside (or over) the queue, or one full-window view in its place. */
+  const [view, setView] = createSignal<View>('main')
+  const toggle = (v: View) => setView((current) => (current === v ? 'main' : v))
+
+  const narrow = matchMedia(STACKED)
+  const [stacked, setStacked] = createSignal(narrow.matches)
+  const onNarrow = (e: MediaQueryListEvent) => setStacked(e.matches)
+  narrow.addEventListener('change', onNarrow)
+  onCleanup(() => narrow.removeEventListener('change', onNarrow))
+  const [columns, setColumns] = createSplit('halocline.split.columns')
+  const [rows, setRows] = createSplit('halocline.split.rows')
+  const split = () => (stacked() ? rows() : columns())
 
   const healthLabel = () => {
     const h = state.health()
@@ -30,41 +47,66 @@ export function App() {
   }
 
   return (
-    <div class="app">
-      <header class="topbar">
-        <h1>Halocline</h1>
-        <nav class="topbar-actions">
-          <button
-            type="button"
-            aria-pressed={showHistory() && !showSettings()}
-            onClick={() => {
-              setShowSettings(false)
-              setShowHistory((v) => !v)
-            }}
-          >
-            {showHistory() && !showSettings() ? 'Search' : 'History'}
-          </button>
-          <button type="button" onClick={() => setShowSettings((v) => !v)}>
-            {showSettings() ? 'Close settings' : 'Settings'}
-          </button>
-        </nav>
-      </header>
-      <main class="panes">
-        <Show when={!showSettings()} fallback={<SettingsPanel state={state} />}>
-          {/* Search stays mounted under History, so its query and results survive. */}
-          <div class="pane-slot" classList={{ hidden: showHistory() }}>
-            <Search state={state} />
-          </div>
-          <Show when={showHistory()}>
-            <History state={state} />
-          </Show>
-          <QueueList state={state} />
-        </Show>
+    <div class="app" classList={{ stacked: stacked(), 'player-open': view() === 'player' }}>
+      <Show when={view() !== 'player'}>
+        <header class="topbar">
+          <h1>Halocline</h1>
+          <nav class="topbar-actions">
+            <button
+              type="button"
+              aria-pressed={view() === 'history'}
+              onClick={() => toggle('history')}
+            >
+              {view() === 'history' ? 'Close history' : 'History'}
+            </button>
+            <button
+              type="button"
+              aria-pressed={view() === 'settings'}
+              onClick={() => toggle('settings')}
+            >
+              {view() === 'settings' ? 'Close settings' : 'Settings'}
+            </button>
+          </nav>
+        </header>
+      </Show>
+      {/* Search stays mounted under the other views, so its query and results survive. */}
+      <main
+        class="panes"
+        classList={{ hidden: view() !== 'main' }}
+        // As fr, so the panes share what the splitter leaves.
+        style={{ '--first': `${split()}fr`, '--second': `${1 - split()}fr` }}
+      >
+        <Search state={state} />
+        <Splitter
+          vertical={stacked()}
+          ratio={split()}
+          onChange={(r) => (stacked() ? setRows(r) : setColumns(r))}
+        />
+        <QueueList state={state} />
       </main>
-      <NowPlaying state={state} />
+      <Switch>
+        <Match when={view() === 'history'}>
+          <main class="view">
+            <History state={state} />
+          </main>
+        </Match>
+        <Match when={view() === 'settings'}>
+          <main class="view">
+            <SettingsPanel state={state} />
+          </main>
+        </Match>
+        <Match when={view() === 'player'}>
+          <main class="view">
+            <PlayerView state={state} onClose={() => setView('main')} />
+          </main>
+        </Match>
+      </Switch>
+      <Show when={view() !== 'player'}>
+        <NowPlaying state={state} compact={stacked()} onExpand={() => setView('player')} />
+      </Show>
       <footer class="statusbar">
         <span class={`dot dot-${state.health()?.status ?? 'green'}`} title={healthLabel()} />
-        <span>{state.error() ?? healthLabel()}</span>
+        <span class="status-text">{state.error() ?? healthLabel()}</span>
         <Show when={scanLabel()}>
           <span class="badge">{scanLabel()}</span>
         </Show>
@@ -72,6 +114,7 @@ export function App() {
           <span class="badge">Stream-safe</span>
         </Show>
       </footer>
+      <ContextMenuHost />
     </div>
   )
 }

@@ -67,9 +67,15 @@ input:not([type]) {
 }
 
 .app {
-  display: grid;
-  grid-template-rows: auto 1fr auto auto;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
+}
+
+/* Search and the queue, or a full-window view in their place. */
+.app > main {
+  flex: 1;
+  min-height: 0;
 }
 
 .topbar,
@@ -92,8 +98,18 @@ input:not([type]) {
 
 .panes {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  min-height: 0;
+  grid-template-columns: minmax(0, var(--first)) auto minmax(0, var(--second));
+}
+
+/* Narrow windows: search on top, the queue under it. */
+.stacked .panes {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, var(--first)) auto minmax(0, var(--second));
+}
+
+/* Keeps search mounted (query and results) while another view is shown. */
+.panes.hidden {
+  display: none;
 }
 
 .pane {
@@ -101,18 +117,46 @@ input:not([type]) {
   overflow-y: auto;
 }
 
-.pane + .pane,
-.panes > .pane:last-child:not(:first-child) {
-  border-left: 1px solid var(--border);
+.view {
+  display: flex;
+  flex-direction: column;
 }
 
-/* Keeps the search pane mounted (query and results) while History is shown. */
-.pane-slot {
-  display: contents;
+.view > * {
+  flex: 1;
+  min-height: 0;
 }
 
-.pane-slot.hidden {
-  display: none;
+/* The line between the panes, with a wider grab area than it draws. */
+.splitter {
+  width: 7px;
+  margin: 0 -3px;
+  z-index: 1;
+  cursor: col-resize;
+  background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat;
+  touch-action: none;
+}
+
+.splitter.vertical {
+  width: auto;
+  height: 7px;
+  margin: -3px 0;
+  cursor: row-resize;
+  background-size: 100% 1px;
+}
+
+.splitter:hover,
+.splitter:focus-visible,
+.splitter:active {
+  outline: none;
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-size: 3px 100%;
+}
+
+.splitter.vertical:hover,
+.splitter.vertical:focus-visible,
+.splitter.vertical:active {
+  background-size: 100% 3px;
 }
 
 .api-info {
@@ -124,6 +168,65 @@ input:not([type]) {
 .topbar-actions {
   display: flex;
   gap: 8px;
+}
+
+.topbar button[aria-pressed='true'] {
+  border-color: var(--accent);
+}
+
+/*
+ * Row buttons (Save, Next, Add, ✕) show only on the row under the pointer, or in
+ * focus. Anything more goes on the row's right-click menu, not a button.
+ */
+.list li .hover-only {
+  display: none;
+}
+
+.list li:hover > .actions > .hover-only,
+.list li:focus-within > .actions > .hover-only,
+.collection-row:hover > .actions > .hover-only,
+.collection-row:focus-within > .actions > .hover-only {
+  display: revert;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 180px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  background: none;
+}
+
+.context-menu button:hover:not(:disabled),
+.context-menu button:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.context-menu button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.context-menu [role='separator'] {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
 }
 
 .history h3.day {
@@ -142,7 +245,7 @@ input:not([type]) {
   font-variant-numeric: tabular-nums;
 }
 
-/* Time, then the song right after it; the buttons go to the far end. */
+/* Time, then the song right after it; the buttons and tags go to the far end. */
 .history .list li {
   justify-content: flex-start;
 }
@@ -151,14 +254,37 @@ input:not([type]) {
   margin-left: auto;
 }
 
+/* A song's tags, stacked in a column of fixed width so every row lines up. */
+.tags {
+  flex: none;
+  width: 6.5em;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.tags .badge {
+  margin-left: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 button.quiet {
   font-size: 12px;
   padding: 2px 8px;
 }
 
-.settings {
-  grid-column: 1 / -1;
-  max-width: 720px;
+/* Controls fill the window up to a comfortable width; text flows the full width. */
+.settings .field > :nth-child(2) {
+  width: 100%;
+  max-width: 36rem;
+}
+
+.settings .field > input[type='number'] {
+  width: 80px;
 }
 
 .settings label {
@@ -200,6 +326,7 @@ h2 {
 
 .search-row input {
   flex: 1;
+  min-width: 0;
 }
 
 .list {
@@ -292,12 +419,132 @@ h2 {
 
 .now-playing {
   display: grid;
-  grid-template-columns: auto auto 1fr 120px;
+  grid-template-columns: auto auto minmax(0, 1fr) 120px;
   gap: 16px;
   align-items: center;
   padding: 10px 16px;
   border-top: 1px solid var(--border);
   background: var(--surface);
+}
+
+.now-playing .volume {
+  width: 100%;
+}
+
+/* Stacked layout: shuffle and repeat share a column with the volume. */
+.now-playing.compact {
+  grid-template-columns: auto auto minmax(0, 1fr) 84px;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.now-playing.compact .transport button {
+  padding: 4px 7px;
+}
+
+.side-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side-controls .transport {
+  justify-content: space-between;
+}
+
+/* The bar's art opens the player view. */
+.art-button {
+  display: block;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+}
+
+.art-button .art {
+  display: block;
+}
+
+.art-button:hover .art,
+.art-button:focus-visible .art {
+  outline: 2px solid var(--accent);
+}
+
+/* The player view: art, progress and controls first, the queue below. */
+.player-view {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.player-view .collapse {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  border-radius: 50%;
+  opacity: 0.5;
+}
+
+.player-view .collapse:hover,
+.player-view .collapse:focus-visible {
+  opacity: 1;
+}
+
+.hero {
+  --hero-art: min(42vh, 80vw, 480px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 24px 16px;
+}
+
+.hero .art {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.hero-art {
+  width: var(--hero-art);
+  height: var(--hero-art);
+}
+
+.hero-info {
+  align-items: center;
+  max-width: 100%;
+  text-align: center;
+}
+
+.hero-info .title {
+  max-width: 100%;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.hero .progress {
+  width: min(100%, 560px);
+}
+
+.hero-controls button {
+  padding: 8px 14px;
+}
+
+.hero-controls .play {
+  padding: 10px 20px;
+}
+
+.hero .volume {
+  width: 160px;
+}
+
+.player-view > .pane {
+  flex: 1 0 160px;
+  border-top: 1px solid var(--border);
 }
 
 .transport {
@@ -376,6 +623,13 @@ h2 {
   border-top: 1px solid var(--border);
 }
 
+.status-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dot {
   width: 8px;
   height: 8px;
@@ -445,8 +699,18 @@ h2 {
 
 .field {
   display: grid !important;
-  grid-template-columns: 120px minmax(0, 280px) auto;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
   gap: 12px;
+}
+
+@media (max-width: 519px) {
+  .field {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .field > :first-child {
+    grid-column: 1 / -1;
+  }
 }
 
 .field select,
@@ -462,11 +726,6 @@ h2 {
 .actions select {
   font-size: 12px;
   padding: 2px 6px;
-}
-
-/* The menu shows "⋯"; its options are wider, but only the open list needs that. */
-.actions select.more {
-  width: 44px;
 }
 
 .field input[type='number'] {

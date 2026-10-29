@@ -110,7 +110,6 @@ function Autoplay(props: { state: AppState }) {
     void props.state.run(() => call('settings.patch', { autoplay: p }))
   const number = (value: string, fallback: number) =>
     Number.isFinite(Number(value)) && value !== '' ? Number(value) : fallback
-  const off = () => !(autoplay()?.enabled ?? true)
 
   return (
     <>
@@ -129,7 +128,6 @@ function Autoplay(props: { state: AppState }) {
           type="number"
           min="1"
           max="50"
-          disabled={off()}
           value={autoplay()?.minQueueLength ?? 2}
           onChange={(e) => patch({ minQueueLength: Math.round(number(e.currentTarget.value, 2)) })}
         />
@@ -138,7 +136,6 @@ function Autoplay(props: { state: AppState }) {
       <label class="field">
         <span>Draw from</span>
         <select
-          disabled={off()}
           value={autoplay()?.sources ?? 'all'}
           onChange={(e) => patch({ sources: e.currentTarget.value as 'all' | 'library' })}
         >
@@ -153,7 +150,6 @@ function Autoplay(props: { state: AppState }) {
           min="0"
           max="1"
           step="0.1"
-          disabled={off()}
           value={autoplay()?.adventurousness ?? 0.3}
           onChange={(e) => patch({ adventurousness: Number(e.currentTarget.value) })}
         />
@@ -171,7 +167,6 @@ function Autoplay(props: { state: AppState }) {
           type="number"
           min="0"
           max="20"
-          disabled={off()}
           value={autoplay()?.artistGap ?? 3}
           onChange={(e) => patch({ artistGap: Math.round(number(e.currentTarget.value, 3)) })}
         />
@@ -183,7 +178,6 @@ function Autoplay(props: { state: AppState }) {
           type="number"
           min="0"
           max="168"
-          disabled={off()}
           value={autoplay()?.recentHours ?? 3}
           onChange={(e) => patch({ recentHours: number(e.currentTarget.value, 3) })}
         />
@@ -468,7 +462,10 @@ function ApiTokens(props: { state: AppState }) {
       <Show when={apiUrl()} fallback={<p>The API server is not running.</p>}>
         <p class="api-info">
           <span>
-            Listening on <code>{apiUrl()}</code>
+            Listening on{' '}
+            <a href={apiUrl()!} target="_blank" rel="noreferrer">
+              <code>{apiUrl()}</code>
+            </a>
           </span>
           <span>
             <a href={`${apiUrl()}/docs`} target="_blank" rel="noreferrer">
@@ -477,7 +474,9 @@ function ApiTokens(props: { state: AppState }) {
             (try requests with a token from below)
           </span>
           <span>
-            OpenAPI document at <code>{apiUrl()}/openapi.json</code>
+            <a href={`${apiUrl()}/openapi.json`} target="_blank" rel="noreferrer">
+              OpenAPI document
+            </a>
           </span>
         </p>
       </Show>

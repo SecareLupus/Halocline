@@ -104,6 +104,32 @@ describe('autoplay', () => {
     expect(queued()).toHaveLength(2)
   })
 
+  it('starts radio from a song: a fresh queue, filled even with autoplay off', async () => {
+    const D = track('ddddddddddd', 'Delta', 'Fourth Artist')
+    const E = track('eeeeeeeeeee', 'Echo', 'Fifth Artist')
+    setup({
+      radio: [C],
+      radios: { [D.videoId]: [E, A] },
+      autoplay: { enabled: false, minQueueLength: 3 },
+    })
+    core.player.patch({ repeat: 'all' })
+    core.queue.add({ recordingId: core.library.ensureYtmSong(C).id, origin: 'user' })
+
+    await core.autoplay.startRadio({
+      recordingId: core.library.ensureYtmSong(D).id,
+      origin: 'user',
+    })
+    expect(queued()).toEqual([
+      ['Delta', 'user'],
+      ['Echo', 'autoplay'],
+      ['Alpha', 'autoplay'],
+    ])
+    // Autoplay is still off: taking one doesn't top the queue up again.
+    core.queue.remove(core.queue.list().items[0]!.id)
+    await core.autoplay.check()
+    expect(queued()).toHaveLength(2)
+  })
+
   it('does nothing when off, or when the queue is long enough', async () => {
     setup({ radio: [A, C], autoplay: { enabled: false } })
     await core.autoplay.check()
