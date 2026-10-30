@@ -15,8 +15,14 @@ Every request needs a token. Make one in **Settings → API**:
 3. Tick the **scopes** it needs, and nothing more.
 4. Press **Create token**, and copy the token straight away: it's shown only once.
 
-Send it with each request as `Authorization: Bearer <token>`. **Revoke** a token in the same list
-when it's no longer needed, or if it leaks.
+Send the token with each request in an HTTP **header**, not in the URL or the request body:
+
+```
+Authorization: Bearer <token>
+```
+
+With `curl` that's `-H "Authorization: Bearer <token>"`, as in the examples below. **Revoke** a
+token in the same list when it's no longer needed, or if it leaks.
 
 | Scope            | Lets a token                                                             |
 | ---------------- | ------------------------------------------------------------------------ |
@@ -99,7 +105,7 @@ react the moment something changes instead of asking over and over. The main eve
 | `queue.changed`                      | the queue changes                                                  |
 | `library.changed`                    | songs are added or changed                                         |
 | `settings.changed`                   | a setting changes                                                  |
-| `health.changed`                     | YouTube Music playback health changes                              |
+| `health.changed`                     | cloud playback health changes (the status dot)                     |
 | `overlay.changed`, `overlay.deleted` | an overlay is edited, made or deleted                              |
 
 If the connection drops, reconnecting with the last event's id (the `Last-Event-ID` header, which
@@ -112,11 +118,6 @@ Errors come back as `application/problem+json`, with a `type` your bot can check
 
 A token over its rate limit gets **429**, with a `Retry-After` header saying how many seconds to
 wait. For a token with a limit, `RateLimit-*` headers on every reply show how much is left.
-
-## Browser-based bots
-
-The API accepts requests from web pages, so browser-based tools such as Twitchat can call it
-directly. That's safe: a page can only use a token it was given.
 
 ## Overlays over the API
 

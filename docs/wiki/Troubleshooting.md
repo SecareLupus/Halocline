@@ -1,15 +1,15 @@
 ## Playback
 
-**YouTube Music songs are skipped.** Look in Settings → YouTube Music. If it says no playback engine
-is available, YouTube Music songs can be found and queued, but not played.
+**Cloud songs are skipped.** Look in Settings → YouTube Music. If it says no playback engine is
+available, YouTube Music songs can be found and queued, but not played.
 
 **The status dot is red.** Direct streaming from YouTube Music keeps failing, usually because
 YouTube changed something. Songs still play, through the fallback (see
-[YouTube Music](YouTube-Music#how-playback-works)), but check for a Halocline update. Point at the
+[Two ways to play](Cloud-music#two-ways-to-play)), but check for a Halocline update. Hover over the
 dot to see the last error.
 
-**A YouTube Music song takes a few seconds to start.** The first song after a while waits on
-YouTube; songs after it are downloaded ahead and start straight away.
+**A cloud song takes a few seconds to start.** The first song after a while waits on the service;
+songs after it are downloaded ahead and start straight away.
 
 **No sound, or sound in the wrong place.** Check **Output device** in Settings → Playback. If it
 says **Disconnected device**, the device you picked isn't there now: plug it back in, or pick
@@ -47,8 +47,9 @@ See [OBS overlays → Troubleshooting](OBS-overlays#troubleshooting).
 **Settings → API says the API server isn't running.** Another program may be using its port
 (17380). Close it and restart Halocline.
 
-**A bot gets 401.** The token is missing, mistyped or revoked. Send it as
-`Authorization: Bearer <token>`. (Only overlay URLs carry a token in the URL itself.)
+**A bot gets 401.** The token is missing, mistyped or revoked. Send it in the request's
+`Authorization` header, as `Bearer <token>`, not in the URL or the body. (Only overlay URLs carry a
+token in the URL itself.)
 
 **A bot gets 403.** The token doesn't have the scope that request needs: see the scopes table in
 [Bots and the API](Bots-and-the-API#tokens). Make a new token with the right scopes.

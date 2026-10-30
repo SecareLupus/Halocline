@@ -170,7 +170,3 @@ The editor is usually easier, but Custom CSS is handy for a tweak to one scene o
 - **It looks small, large or cut off.** Set the Browser Source's width and height to the size
   shown when you copied the URL.
 - **A "not found" error.** That overlay was deleted. Copy the URL of another one.
-- **Upgrading from 0.1:** your overlay carries on at the same URL, as an editable overlay named
-  Classic. It now keeps a fixed size and scales instead of stretching, and the
-  old Custom CSS variables such as `--hl-bar-color` no longer work: change those colours in the
-  editor instead.

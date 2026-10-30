@@ -33,7 +33,7 @@ picks.
 ## YouTube Music
 
 **Sign in…** or **Sign out**, and **Use as** to choose which of your channels to play as. See
-[YouTube Music](YouTube-Music).
+[Cloud music → YouTube Music](Cloud-music#youtube-music).
 
 ## Library folders
 

@@ -4,14 +4,14 @@ In a narrow window, search sits above the queue.
 
 ## Search
 
-Type in the search box to search your library and YouTube Music at once. Your library's results
-come first, then YouTube Music songs, then YouTube Music albums and playlists.
+Type in the search box to search your library and [cloud music](Cloud-music) at once. Your
+library's results come first, then cloud songs, then cloud albums and playlists.
 
-Each song has buttons when you point at it:
+Each song has buttons when you hover over it:
 
 - **Add** puts it on the end of the queue.
 - **Next** puts it at the front, to play after the current song.
-- **Save** adds a YouTube Music song to your [library](Library).
+- **Save** adds a cloud song to your [library](Library).
 
 Right-click any song for more: **Play next**, **Add to queue**, **Save to library**,
 **[Start radio](Autoplay-and-radio#start-radio)**, and for library songs, stream-safe tagging,
@@ -30,8 +30,8 @@ Paste a song link into the search box instead of typing. Halocline understands l
 - Tidal
 - Deezer
 
-It reads the song's details from the link, then finds the same song: your own copy first, then
-YouTube Music. You'll see what the link was read as, the best match, and the alternatives, each
+It reads the song's details from the link, then finds the same song: your own copy first, then in
+the cloud. You'll see what the link was read as, the best match, and the alternatives, each
 with a score for how sure the match is. Pick one to queue it. Halocline never plays a doubtful
 match on its own: if no match is confident, it shows the choices instead.
 
@@ -39,10 +39,10 @@ YouTube Music album and playlist links work too, and open like albums and playli
 
 ## The queue
 
-The queue lists what's coming up. Drag songs to reorder them. Point at a song to remove it, or
+The queue lists what's coming up. Drag songs to reorder them. Hover over a song to remove it, or
 right-click for **Play next** and **Remove from queue**.
 
-- **Play from:** a song you have both as a file and on YouTube Music has a menu to choose where it
+- **Play from:** a song you have both as a file and in the cloud has a menu to choose where it
   plays from. **Auto** prefers your file.
 - **Will be skipped:** with [stream-safe mode](Stream-safe-mode) on, songs that aren't tagged
   stream-safe are marked, and skipped when their turn comes.
@@ -62,7 +62,7 @@ repeat and volume.
     Autoplay adds nothing while repeat is on.
   - **One** plays the current song again.
 - Each song has a small badge showing where it's playing from: `local`, `cache`, `direct` or
-  `fallback`. See [YouTube Music](YouTube-Music#how-playback-works).
+  `fallback`. See [Cloud music](Cloud-music#where-a-song-plays-from).
 
 Click the album art to open the **player view**: big art, the controls and the queue. Press
 Escape, or the ⌄ in its corner, to go back.

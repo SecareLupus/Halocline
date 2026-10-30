@@ -4,7 +4,7 @@
 - [Playing music](Playing-music)
 - [Library](Library)
 - [Stream-safe mode](Stream-safe-mode)
-- [YouTube Music](YouTube-Music)
+- [Cloud music](Cloud-music)
 - [Autoplay and radio](Autoplay-and-radio)
 - [OBS overlays](OBS-overlays)
 - [Bots and the API](Bots-and-the-API)

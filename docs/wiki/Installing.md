@@ -1,4 +1,5 @@
-Download Halocline from the [latest release](https://github.com/SecareLupus/Halocline/releases/latest).
+Download Halocline from the [latest
+release](https://github.com/SecareLupus/Halocline/releases/latest).
 
 ## Linux
 
@@ -38,7 +39,7 @@ In that folder:
 
 - `halocline.db` holds the library, the queue, settings, overlays, history and API tokens.
 - `artwork` holds cover art taken from your files, and images uploaded for overlays.
-- `track-cache` holds recently played YouTube Music tracks (up to 1 GB), so they start quickly
+- `track-cache` holds recently played cloud songs (up to 1 GB), so they start quickly
   and survive network blips.
 - `models` holds the audio analysis model, downloaded the first time it's needed (78 MB).
 

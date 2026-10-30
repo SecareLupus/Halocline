@@ -9,7 +9,7 @@ Tag songs in your [library](Library):
   stream-safe**.
 - To tag many at once, search for them, then use **Mark all stream-safe** above the results.
 
-Tagging a YouTube Music song saves it to your library too.
+Tagging a cloud song saves it to your library too.
 
 ## Turning it on
 
@@ -26,5 +26,5 @@ While it's on:
 - [Autoplay](Autoplay-and-radio) picks only tagged songs, which in practice means songs from your
   library.
 
-A YouTube Music song requested from chat that you also own as a file counts as your file, so it
+A cloud song requested from chat that you also own as a file counts as your file, so it
 carries your file's stream-safe tag.

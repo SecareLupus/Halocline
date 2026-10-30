@@ -1,8 +1,8 @@
 # Halocline
 
-A desktop music player for live streaming. Local files and YouTube Music share one queue, a
-built-in OBS overlay shows what's playing, and everything the app can do is also available over an
-HTTP API with a live event stream, so stream bots can drive it.
+A desktop music player for live streaming. Your music files and cloud music (YouTube Music, for
+now) share one queue, a built-in OBS overlay shows what's playing, and everything the app can do is
+also available over an HTTP API with a live event stream, so stream bots can drive it.
 
 > **Status: in development.** The current release is
 > [0.2.0](https://github.com/SecareLupus/Halocline/releases/latest). Expect rough edges. See
@@ -12,14 +12,14 @@ Linux (Ubuntu) first, then Windows.
 
 ## Features
 
-- **One queue for local files and YouTube Music.** Search both from one box, or paste a YouTube,
+- **One queue for your files and cloud music.** Search both from one box, or paste a YouTube,
   YouTube Music, Spotify, Apple Music, Tidal or Deezer link to play the matching song. Your own
   copy plays when you have one.
-- **Library:** music folders are scanned and watched. YouTube Music songs can be saved alongside
-  your files, and duplicates merged.
+- **Library:** music folders are scanned and watched. Cloud songs can be saved alongside your
+  files, and duplicates merged.
 - **Stream-safe mode:** tag the songs you've cleared for stream, and only those can be queued or
   played.
-- **Autoplay** keeps the queue going with similar songs, from YouTube Music's radio and audio
+- **Autoplay** keeps the queue going with similar songs, from the cloud service's radio and audio
   analysis (tempo, key, energy and sound) of your library. **Start radio** sends it somewhere new.
 - **OBS overlays** you design yourself: start from a template, then drag, resize and restyle with
   a live preview while OBS redraws. Album art, text with the song, requester and what's next,
@@ -41,7 +41,7 @@ The **[user manual](https://github.com/SecareLupus/Halocline/wiki)** is the proj
 - [Playing music](https://github.com/SecareLupus/Halocline/wiki/Playing-music),
   [Library](https://github.com/SecareLupus/Halocline/wiki/Library) and
   [Stream-safe mode](https://github.com/SecareLupus/Halocline/wiki/Stream-safe-mode)
-- [YouTube Music](https://github.com/SecareLupus/Halocline/wiki/YouTube-Music) and
+- [Cloud music](https://github.com/SecareLupus/Halocline/wiki/Cloud-music) and
   [Autoplay and radio](https://github.com/SecareLupus/Halocline/wiki/Autoplay-and-radio)
 - [OBS overlays](https://github.com/SecareLupus/Halocline/wiki/OBS-overlays)
 - [Bots and the API](https://github.com/SecareLupus/Halocline/wiki/Bots-and-the-API)
