@@ -9,6 +9,7 @@ export const ELEMENT_TYPES: { type: ElementType; label: string }[] = [
   { type: 'art', label: 'Album art' },
   { type: 'text', label: 'Text' },
   { type: 'progress', label: 'Progress bar' },
+  { type: 'image', label: 'Image' },
 ]
 
 const ID_BASE: Record<ElementType, string> = {
@@ -16,6 +17,7 @@ const ID_BASE: Record<ElementType, string> = {
   art: 'art',
   text: 'text',
   progress: 'bar',
+  image: 'image',
 }
 
 /** `base` if it's free, else `base-2`, `base-3` and so on. */
@@ -29,7 +31,7 @@ export function uniqueId(doc: OverlayDocument, base: string): string {
 
 /**
  * Adds an element at the front, with the schema's default styles, placed and
- * sized to suit the canvas: a panel or bar spans it, art fills its height.
+ * sized to suit the canvas: a panel or bar spans it, art or an image fills its height.
  */
 export function addElement(
   doc: OverlayDocument,
@@ -43,7 +45,7 @@ export function addElement(
   const box =
     type === 'rect'
       ? { x: 0, y: 0, width, height }
-      : type === 'art'
+      : type === 'art' || type === 'image'
         ? { x: 0, y: 0, width: side, height: side }
         : type === 'text'
           ? { x: 0, y: (height - line) / 2, width, height: line }

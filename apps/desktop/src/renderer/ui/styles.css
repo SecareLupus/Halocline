@@ -1050,3 +1050,18 @@ button.element-name span {
   margin-top: 12px;
   width: 100%;
 }
+
+.image-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: repeating-conic-gradient(#8a9099 0 25%, #5f656d 0 50%) 0 0 / 8px 8px;
+}
+
+/* An image element with nothing chosen yet: invisible in OBS, outlined here. */
+.overlay-stage [data-empty] {
+  outline: 1px dashed var(--muted);
+  outline-offset: -1px;
+}

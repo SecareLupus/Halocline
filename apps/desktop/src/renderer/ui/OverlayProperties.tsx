@@ -4,6 +4,7 @@ import {
   SYSTEM_FONT,
   type OverlayDocument,
   type OverlayElement,
+  type Shape,
   type ShowWhen,
 } from '@halocline/core/overlay'
 import {
@@ -18,6 +19,7 @@ import {
   type ElementType,
 } from '@halocline/overlay'
 import { createSignal, For, Match, onMount, Show, Switch, type JSX } from 'solid-js'
+import { call } from './bridge'
 import type { OnEdit } from './overlay-edit'
 
 const TYPE_LABEL = Object.fromEntries(ELEMENT_TYPES.map((t) => [t.type, t.label])) as Record<
@@ -32,6 +34,15 @@ const SHOW_WHEN: { value: ShowWhen; label: string }[] = [
   { value: 'requested', label: 'When someone requested the song' },
   { value: 'not-requested', label: 'When nobody requested it' },
   { value: 'has-next', label: "When there's a next song" },
+]
+
+const SHAPES: { value: Shape; label: string }[] = [
+  { value: 'rect', label: 'Box' },
+  { value: 'hexagon', label: 'Hexagon' },
+  { value: 'octagon', label: 'Octagon' },
+  { value: 'diamond', label: 'Diamond' },
+  { value: 'triangle', label: 'Triangle' },
+  { value: 'star', label: 'Star' },
 ]
 
 const GENERIC_FONTS = [SYSTEM_FONT, 'system-ui', 'sans-serif', 'serif', 'monospace']
@@ -308,24 +319,14 @@ function ElementProps(props: {
               value={e().fill}
               onChange={(fill) => props.onChange({ fill })}
             />
-            <RadiusProp value={e().radius} onChange={(radius) => props.onChange({ radius })} />
-            <BorderProps
-              width={e().borderWidth}
-              color={e().borderColor}
-              onChange={props.onChange}
-            />
+            <ClipProps element={e()} onChange={props.onChange} />
           </>
         )}
       </Match>
       <Match when={props.element.type === 'art' && props.element}>
         {(e) => (
           <>
-            <RadiusProp value={e().radius} onChange={(radius) => props.onChange({ radius })} />
-            <BorderProps
-              width={e().borderWidth}
-              color={e().borderColor}
-              onChange={props.onChange}
-            />
+            <ClipProps element={e()} onChange={props.onChange} />
             <ColorProp
               label="No art"
               value={e().placeholder}
@@ -424,6 +425,26 @@ function ElementProps(props: {
           </>
         )}
       </Match>
+      <Match when={props.element.type === 'image' && props.element}>
+        {(e) => (
+          <>
+            <ImageProp label="Image" value={e().src} onChange={(src) => props.onChange({ src })} />
+            <Prop label="Fit">
+              <select
+                value={e().fit}
+                onChange={(ev) =>
+                  props.onChange({ fit: ev.currentTarget.value as 'cover' | 'contain' | 'fill' })
+                }
+              >
+                <option value="contain">Fit the whole image</option>
+                <option value="cover">Fill the box, cropping</option>
+                <option value="fill">Stretch to the box</option>
+              </select>
+            </Prop>
+            <ClipProps element={e()} onChange={props.onChange} />
+          </>
+        )}
+      </Match>
       <Match when={props.element.type === 'progress' && props.element}>
         {(e) => (
           <>
@@ -497,6 +518,102 @@ function RadiusProp(props: { value: number; onChange: (radius: number) => void }
         </label>
       </span>
     </div>
+  )
+}
+
+/**
+ * Corners, border, shape and mask, for panels, art and images. A border follows
+ * the box, so a shape would cut it into pieces: it's only offered on a box.
+ */
+function ClipProps(props: {
+  element: {
+    radius: number
+    borderWidth: number
+    borderColor: string
+    shape: Shape
+    mask: string | null
+  }
+  onChange: (changes: {
+    radius?: number
+    borderWidth?: number
+    borderColor?: string
+    shape?: Shape
+    mask?: string | null
+  }) => void
+}) {
+  return (
+    <>
+      <Prop label="Shape">
+        <select
+          value={props.element.shape}
+          onChange={(e) => props.onChange({ shape: e.currentTarget.value as Shape })}
+        >
+          <For each={SHAPES}>{(s) => <option value={s.value}>{s.label}</option>}</For>
+        </select>
+      </Prop>
+      <Show when={props.element.shape === 'rect'}>
+        <RadiusProp
+          value={props.element.radius}
+          onChange={(radius) => props.onChange({ radius })}
+        />
+        <BorderProps
+          width={props.element.borderWidth}
+          color={props.element.borderColor}
+          onChange={props.onChange}
+        />
+      </Show>
+      <ImageProp
+        label="Mask"
+        value={props.element.mask}
+        optional
+        hint="An image whose see-through parts hide this element: a PNG with transparency."
+        onChange={(mask) => props.onChange({ mask })}
+      />
+    </>
+  )
+}
+
+/**
+ * An uploaded image: a thumbnail, and Choose… for a file (stored by content, like
+ * cover art); Remove too when it's `optional`.
+ */
+function ImageProp(props: {
+  label: string
+  value: string | null
+  optional?: boolean
+  hint?: string
+  onChange: (name: string | null) => void
+}) {
+  const [problem, setProblem] = createSignal<string | null>(null)
+  const choose = async () => {
+    try {
+      setProblem(null)
+      const name = await call('overlays.addImage')
+      if (name) props.onChange(name)
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : String(err))
+    }
+  }
+  return (
+    <>
+      <div class="prop" title={props.hint}>
+        <span>{props.label}</span>
+        <span class="prop-inline">
+          <Show when={props.value}>
+            {(name) => <img class="image-thumb" src={`artwork://${name()}`} alt="" />}
+          </Show>
+          <button type="button" onClick={() => void choose()}>
+            {props.value ? 'Replace…' : 'Choose…'}
+          </button>
+          <Show when={props.optional && props.value}>
+            <button type="button" class="quiet" onClick={() => props.onChange(null)}>
+              Remove
+            </button>
+          </Show>
+        </span>
+      </div>
+      <Show when={problem()}>{(text) => <p class="prop-hint warning">{text()}</p>}</Show>
+    </>
   )
 }
 

@@ -28,6 +28,8 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
       radius: 0,
       borderWidth: 0,
       borderColor: '#ffffff',
+      shape: 'rect',
+      mask: null,
     },
     {
       type: 'art',
@@ -42,6 +44,8 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
       radius: 0,
       borderWidth: 0,
       borderColor: '#ffffff',
+      shape: 'rect',
+      mask: null,
       pausedShade: 'rgb(0 0 0 / 0.55)',
       pauseSign: '#ffffff',
     },

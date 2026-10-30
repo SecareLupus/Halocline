@@ -31,11 +31,12 @@ const progress = {
   edge: null,
   radius: ROUND_RADIUS,
 } as const
-const noBorder = { borderWidth: 0, borderColor: '#ffffff' } as const
+/** No border, no shape, no mask. */
+const plain = { borderWidth: 0, borderColor: '#ffffff', shape: 'rect', mask: null } as const
 const art = {
   type: 'art',
   showWhen: 'always',
-  ...noBorder,
+  ...plain,
   opacity: 1,
   placeholder: 'rgb(255 255 255 / 0.15)',
   pausedShade: 'rgb(0 0 0 / 0.55)',
@@ -59,7 +60,7 @@ const PILL: OverlayDocument = {
       opacity: 1,
       fill: 'rgb(0 0 0 / 0.75)',
       radius: ROUND_RADIUS,
-      ...noBorder,
+      ...plain,
     },
     { ...art, id: 'art', x: 8, y: 8, width: 40, height: 40, radius: ROUND_RADIUS },
     {
@@ -104,7 +105,7 @@ const CARD: OverlayDocument = {
       opacity: 1,
       fill: 'rgb(0 0 0 / 0.75)',
       radius: 12,
-      ...noBorder,
+      ...plain,
     },
     { ...art, id: 'art', x: 12, y: 12, width: 216, height: 216, radius: 8 },
     {

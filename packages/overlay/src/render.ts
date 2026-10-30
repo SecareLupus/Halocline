@@ -1,4 +1,4 @@
-import type { OverlayDocument, OverlayElement } from '@halocline/core/overlay'
+import type { OverlayDocument, OverlayElement, Shape } from '@halocline/core/overlay'
 import {
   canvasScale,
   fitScale,
@@ -80,12 +80,14 @@ export function mountOverlay(
     canvas.style.height = px(current.canvas.height)
     canvas.replaceChildren()
     drawn = current.elements.map((element) => {
-      rule(`${scope} .hl-${CSS.escape(element.id)}`, elementStyle(element))
+      rule(`${scope} .hl-${CSS.escape(element.id)}`, elementStyle(element, artworkUrl))
       const node = page.createElement('div')
       node.className = `hl-el hl-${element.id}`
       node.dataset.type = element.type
       // The editor maps a click in its preview back to the element.
       node.dataset.id = element.id
+      // An image element with nothing chosen yet: the editor outlines it.
+      if (element.type === 'image' && !element.src) node.dataset.empty = ''
       canvas.append(node)
       const slots: HTMLElement[] = []
       if (element.type === 'art' || element.type === 'text') {
@@ -226,12 +228,43 @@ export function mountOverlay(
 
 const px = (n: number) => `${n}px`
 
+/** `url("…")` for an image name, or `none` if there's none or it can't be shown here. */
+function cssUrl(name: string | null, resolve: (name: string) => string | null): string {
+  const url = name ? resolve(name) : null
+  return url ? `url("${url.replace(/"/g, '%22')}")` : 'none'
+}
+
+/** Shapes other than the box, as clip paths in percent of it. */
+const SHAPES: Record<Exclude<Shape, 'rect'>, string> = {
+  hexagon: 'polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)',
+  octagon: 'polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%)',
+  diamond: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)',
+  triangle: 'polygon(50% 0, 100% 100%, 0 100%)',
+  star: 'polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)',
+}
+
+/** A shape and an image mask: url() is set on the property itself, never through a variable. */
+function maskStyle(
+  element: { shape: Shape; mask: string | null },
+  resolve: (name: string) => string | null,
+): Record<string, string> {
+  const mask = cssUrl(element.mask, resolve)
+  return {
+    'clip-path': element.shape === 'rect' ? 'none' : SHAPES[element.shape],
+    'mask-image': mask,
+    '-webkit-mask-image': mask,
+  }
+}
+
 function withClass(node: HTMLElement, className: string): HTMLElement {
   node.className = className
   return node
 }
 
-function elementStyle(element: OverlayElement): Record<string, string> {
+function elementStyle(
+  element: OverlayElement,
+  resolve: (name: string) => string | null,
+): Record<string, string> {
   const box = {
     left: px(element.x),
     top: px(element.y),
@@ -247,6 +280,7 @@ function elementStyle(element: OverlayElement): Record<string, string> {
         '--hl-radius': px(element.radius),
         '--hl-border-width': px(element.borderWidth),
         '--hl-border-color': element.borderColor,
+        ...maskStyle(element, resolve),
       }
     case 'art':
       return {
@@ -258,6 +292,17 @@ function elementStyle(element: OverlayElement): Record<string, string> {
         '--hl-shade': element.pausedShade,
         '--hl-sign': element.pauseSign ?? 'transparent',
         '--hl-sign-opacity': element.pauseSign === null ? '0' : '1',
+        ...maskStyle(element, resolve),
+      }
+    case 'image':
+      return {
+        ...box,
+        'background-image': cssUrl(element.src, resolve),
+        'background-size': element.fit === 'fill' ? '100% 100%' : element.fit,
+        '--hl-radius': px(element.radius),
+        '--hl-border-width': px(element.borderWidth),
+        '--hl-border-color': element.borderColor,
+        ...maskStyle(element, resolve),
       }
     case 'text':
       return {

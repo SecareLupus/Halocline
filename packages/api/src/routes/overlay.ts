@@ -1,14 +1,17 @@
 import {
   DEFAULT_OVERLAY_ID,
+  MAX_IMAGE_BYTES,
   NewOverlay,
   Overlay,
   OverlayId,
+  OverlayImageName,
   OverlayUpdate,
   type Core,
 } from '@halocline/core'
 import renderer from '@halocline/overlay/page?bundle'
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import type { Context } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
@@ -182,6 +185,43 @@ export function registerOverlay(app: OpenAPIHono<ApiEnv>, core: Core) {
       },
     }),
     (c) => c.json(withETag(c, core.overlays.create(c.req.valid('json'))), 201),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/overlays/images',
+      tags: ['overlay'],
+      summary: 'Upload an image for overlays: PNG, JPEG, WebP or GIF, up to 10 MB',
+      description:
+        "Send the image's bytes as the body. It's stored by content, so the same image gets " +
+        "the same name. Use the name as an image element's `src`, or as a `mask`; it's " +
+        'served at `/v1/artwork/{name}`.',
+      middleware: [
+        requireScope('admin'),
+        bodyLimit({
+          maxSize: MAX_IMAGE_BYTES,
+          onError: (c) => problem(c, 'invalid_request', 'Images can be up to 10 MB'),
+        }),
+      ],
+      request: {
+        body: { content: { 'application/octet-stream': { schema: z.any() } }, required: true },
+      },
+      responses: {
+        201: {
+          description: 'Stored',
+          content: {
+            'application/json': { schema: z.object({ name: OverlayImageName }) },
+          },
+        },
+        ...authErrors,
+        400: errorResponse('Not a PNG, JPEG, WebP or GIF, or over 10 MB'),
+      },
+    }),
+    async (c) => {
+      const data = new Uint8Array(await c.req.arrayBuffer())
+      return c.json({ name: await core.overlays.addImage(data) }, 201)
+    },
   )
 
   app.openapi(

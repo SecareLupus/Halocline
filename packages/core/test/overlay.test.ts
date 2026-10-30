@@ -71,13 +71,18 @@ describe('overlay files', () => {
   it('round-trips an export, keeping the name and leaving out the id', () => {
     const file = JSON.parse(JSON.stringify(toOverlayFile(overlay))) as unknown
     expect(file).not.toHaveProperty('id')
-    expect(readOverlayFile(file, 'Imported')).toEqual({ name: 'Stream', document: CLASSIC_OVERLAY })
+    expect(readOverlayFile(file, 'Imported')).toEqual({
+      name: 'Stream',
+      document: CLASSIC_OVERLAY,
+      images: {},
+    })
   })
 
   it('takes a bare document, named after the file', () => {
     expect(readOverlayFile(CLASSIC_OVERLAY, 'classic')).toEqual({
       name: 'classic',
       document: CLASSIC_OVERLAY,
+      images: {},
     })
   })
 

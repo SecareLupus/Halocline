@@ -91,7 +91,7 @@ export {
 } from './services/player'
 export * from './playback'
 export { QueueService, type AddToQueue } from './services/queue'
-export { OverlayService } from './services/overlays'
+export { MAX_IMAGE_BYTES, OverlayService } from './services/overlays'
 export { SettingsService } from './services/settings'
 export { TokenService } from './services/tokens'
 export { CircuitBreaker } from './stream/circuit-breaker'
@@ -215,7 +215,7 @@ export function createCore(options: {
     ...options.autoplay,
   })
   const tokens = new TokenService(db)
-  const overlays = new OverlayService(db, events)
+  const overlays = new OverlayService(db, events, scannerOptions.artworkDir)
   return {
     db,
     events,

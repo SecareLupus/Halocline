@@ -3,13 +3,12 @@ import {
   DEFAULT_OVERLAY_ID,
   DomainError,
   Id,
+  MAX_IMAGE_BYTES,
   MergeRecordings,
   NewOverlay,
   OverlayId,
   OverlayUpdate,
   PlayerPatch,
-  readOverlayFile,
-  toOverlayFile,
   QueuePosition,
   RecordingPatch,
   Scope,
@@ -20,7 +19,7 @@ import {
 } from '@halocline/core'
 import { overlayUrl } from '@halocline/api'
 import { BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { z } from 'zod'
 import {
@@ -228,8 +227,26 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
         ? await dialog.showSaveDialog(window, options)
         : await dialog.showSaveDialog(options)
       if (canceled || !filePath) return false
-      await writeFile(filePath, JSON.stringify(toOverlayFile(overlay), null, 2) + '\n')
+      const file = await core.overlays.exportFile(overlay.id)
+      await writeFile(filePath, JSON.stringify(file, null, 2) + '\n')
       return true
+    },
+    'overlays.addImage': async () => {
+      const window = BrowserWindow.getFocusedWindow()
+      const options: Electron.OpenDialogOptions = {
+        title: 'Choose an image',
+        properties: ['openFile'],
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+      }
+      const { filePaths } = window
+        ? await dialog.showOpenDialog(window, options)
+        : await dialog.showOpenDialog(options)
+      const path = filePaths[0]
+      if (!path) return null
+      if ((await stat(path)).size > MAX_IMAGE_BYTES) {
+        throw new DomainError('invalid_request', 'Images can be up to 10 MB')
+      }
+      return core.overlays.addImage(await readFile(path))
     },
     'overlays.import': async () => {
       const window = BrowserWindow.getFocusedWindow()
@@ -249,7 +266,7 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
       } catch {
         throw new DomainError('invalid_request', `${basename(path)} isn't JSON`)
       }
-      return core.overlays.create(readOverlayFile(data, basename(path).replace(/\.json$/i, '')))
+      return core.overlays.importFile(data, basename(path).replace(/\.json$/i, ''))
     },
   }
 

@@ -166,3 +166,29 @@ describe('overlay', () => {
     await reader.cancel()
   })
 })
+
+describe('overlay images', () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+  const upload = (body: Uint8Array, token: string) =>
+    app.request('http://127.0.0.1:17380/v1/overlays/images', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/png' },
+      body,
+    })
+
+  it('stores an upload by content, served like cover art', async () => {
+    const res = await upload(png, admin())
+    expect(res.status).toBe(201)
+    const { name } = (await res.json()) as { name: string }
+    expect(name).toMatch(/^[0-9a-f]{40}\.png$/)
+    const served = await get(`/v1/artwork/${name}?token=${core.tokens.overlaySecret()}`)
+    expect(served.status).toBe(200)
+    expect(served.headers.get('Content-Type')).toBe('image/png')
+    expect(new Uint8Array(await served.arrayBuffer())).toEqual(png)
+  })
+
+  it('refuses other files, and tokens without admin', async () => {
+    expect((await upload(new TextEncoder().encode('<svg/>'), admin())).status).toBe(400)
+    expect((await upload(png, core.tokens.create('r', ['read']).secret)).status).toBe(403)
+  })
+})

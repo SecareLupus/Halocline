@@ -81,6 +81,22 @@ export const BASE_CSS = `
   opacity: var(--hl-sign-opacity);
 }
 
+:where(.hl-overlay) [data-type='image'] {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-origin: padding-box;
+  border-radius: var(--hl-radius);
+  border: var(--hl-border-width) solid var(--hl-border-color);
+}
+
+/* Image masks stretch over the element, so a mask drawn for one size fits any. */
+:where(.hl-overlay) .hl-el {
+  mask-size: 100% 100%;
+  -webkit-mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
 :where(.hl-overlay) [data-type='text'] {
   font-family: var(--hl-font);
   font-weight: var(--hl-weight);

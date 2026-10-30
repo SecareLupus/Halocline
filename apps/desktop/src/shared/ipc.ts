@@ -137,6 +137,8 @@ export interface IpcHandlers {
   'overlays.export': (args: { id: string }) => boolean
   /** Creates an overlay from a file the user picks (an export, or a bare document); null if they cancel. */
   'overlays.import': () => Overlay | null
+  /** Stores an image file the user picks (PNG, JPEG, WebP or GIF) for overlays; its name, or null if they cancel. */
+  'overlays.addImage': () => string | null
 }
 
 export type IpcChannel = keyof IpcHandlers

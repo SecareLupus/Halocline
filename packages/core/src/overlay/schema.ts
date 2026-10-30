@@ -40,6 +40,20 @@ export const ShowWhen = z.enum([
 ])
 export type ShowWhen = z.infer<typeof ShowWhen>
 
+/** An uploaded image, named by a hash of its bytes, like extracted cover art. */
+export const OverlayImageName = z.string().regex(/^[0-9a-f]{40}\.(png|jpg|webp|gif)$/)
+
+/** Shapes an element can be clipped to; `rect` is its box (with `radius` for rounding). */
+export const Shape = z.enum(['rect', 'hexagon', 'octagon', 'diamond', 'triangle', 'star'])
+export type Shape = z.infer<typeof Shape>
+
+/** Clipping beyond rounded corners: a shape, or an image's alpha. */
+const masking = {
+  shape: Shape.default('rect'),
+  /** An uploaded image whose alpha clips the element: opaque shows, transparent hides. */
+  mask: OverlayImageName.nullable().default(null),
+}
+
 /** Position and size in canvas pixels. */
 const box = {
   id: OverlayElementId,
@@ -57,6 +71,7 @@ export const RectElement = z.object({
   fill: Css.default('rgb(0 0 0 / 0.7)'),
   radius: Radius.default(0),
   ...border,
+  ...masking,
 })
 
 export const ArtElement = z.object({
@@ -71,6 +86,20 @@ export const ArtElement = z.object({
   pausedShade: Css.default('rgb(0 0 0 / 0.55)'),
   /** The pause sign's colour; null shows none. */
   pauseSign: Css.nullable().default('#ffffff'),
+  ...masking,
+})
+
+/** A picture that isn't the song's: a logo, a frame. */
+export const ImageElement = z.object({
+  type: z.literal('image'),
+  ...box,
+  /** An uploaded image; null until one is chosen. */
+  src: OverlayImageName.nullable().default(null),
+  /** `cover` fills the box and crops, `contain` fits the whole image, `fill` stretches it. */
+  fit: z.enum(['cover', 'contain', 'fill']).default('contain'),
+  radius: Radius.default(0),
+  ...border,
+  ...masking,
 })
 
 export const TextElement = z.object({
@@ -111,6 +140,7 @@ export const OverlayElement = z.discriminatedUnion('type', [
   ArtElement,
   TextElement,
   ProgressElement,
+  ImageElement,
 ])
 export type OverlayElement = z.infer<typeof OverlayElement>
 
@@ -148,6 +178,15 @@ export const OverlayDocument = z
     })
   })
 export type OverlayDocument = z.infer<typeof OverlayDocument>
+
+/** The uploaded images a document uses, as image sources or masks. */
+export function imagesIn(doc: OverlayDocument): string[] {
+  const names = doc.elements.flatMap((e) => [
+    ...('src' in e && e.src ? [e.src] : []),
+    ...('mask' in e && e.mask ? [e.mask] : []),
+  ])
+  return [...new Set(names)]
+}
 
 /** Generated ids are UUIDs; the default overlay's is `now-playing`. Used in the overlay's URL. */
 export const OverlayId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)

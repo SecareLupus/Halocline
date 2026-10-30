@@ -1,14 +1,21 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Db } from '../db'
 import { DomainError } from '../errors'
 import type { EventBus } from '../events'
 import {
   CLASSIC_OVERLAY,
   DEFAULT_OVERLAY_ID,
+  imagesIn,
   NewOverlay,
   OverlayDocument,
+  OverlayImageName,
   OverlayUpdate,
+  readOverlayFile,
+  toOverlayFile,
   type Overlay,
+  type OverlayFile,
 } from '../overlay'
 
 interface OverlayRow {
@@ -29,14 +36,31 @@ const toOverlay = (r: OverlayRow): Overlay => ({
   updatedAt: r.updated_at,
 })
 
+/** Uploaded images: big enough for a logo or a frame, small enough to keep in a file. */
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+/** The image type from its first bytes, rather than trusting a name or a header. */
+function imageType(data: Uint8Array): 'png' | 'jpg' | 'webp' | 'gif' | null {
+  const b = (i: number) => data[i]
+  const ascii = (from: number, to: number) => String.fromCharCode(...data.subarray(from, to))
+  if (b(0) === 0x89 && ascii(1, 4) === 'PNG') return 'png'
+  if (b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return 'jpg'
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'webp'
+  if (ascii(0, 4) === 'GIF8') return 'gif'
+  return null
+}
+
 /**
  * OBS overlay documents (PLAN §8). Each change replaces the document whole, bumps
  * the overlay's revision and publishes `overlay.changed`, so open pages redraw.
+ * Uploaded images are kept by content beside the cover art, in `imageDir`, which
+ * the API (`/v1/artwork`) and the app (`artwork://`) already serve.
  */
 export class OverlayService {
   constructor(
     private readonly db: Db,
     private readonly events: EventBus,
+    private readonly imageDir: string,
   ) {
     // The default overlay is always there: OBS scenes point at its address.
     const now = new Date().toISOString()
@@ -108,6 +132,44 @@ export class OverlayService {
     const { changes } = this.db.prepare('DELETE FROM overlays WHERE id = ?').run(id)
     if (!changes) throw new DomainError('not_found', `No overlay with id ${id}`)
     this.events.publish({ type: 'overlay.deleted', data: { id } })
+  }
+
+  /** Stores an image (PNG, JPEG, WebP or GIF) and returns its name; the same image, the same name. */
+  async addImage(data: Uint8Array): Promise<string> {
+    if (data.length > MAX_IMAGE_BYTES) {
+      throw new DomainError('invalid_request', 'Images can be up to 10 MB')
+    }
+    const type = imageType(data)
+    if (!type) throw new DomainError('invalid_request', 'Images must be PNG, JPEG, WebP or GIF')
+    const name = `${createHash('sha1').update(data).digest('hex')}.${type}`
+    await mkdir(this.imageDir, { recursive: true })
+    await writeFile(join(this.imageDir, name), data)
+    return name
+  }
+
+  /** An overlay as a file, with the images it uses, so it's complete on another machine. */
+  async exportFile(id: string): Promise<OverlayFile> {
+    const overlay = this.get(id)
+    const images: Record<string, string> = {}
+    for (const name of imagesIn(overlay.document)) {
+      // An image that's gone would only be missing on the other side too.
+      const data = await readFile(join(this.imageDir, name)).catch(() => null)
+      if (data) images[name] = data.toString('base64')
+    }
+    return toOverlayFile(overlay, images)
+  }
+
+  /** A new overlay from a file's JSON (see `readOverlayFile`), storing the images it brings. */
+  async importFile(data: unknown, fallbackName: string): Promise<Overlay> {
+    const { images, ...overlay } = readOverlayFile(data, fallbackName)
+    for (const [name, base64] of Object.entries(images)) {
+      // Stored under the name its bytes give, so a file can't pass one image off as another.
+      const stored = await this.addImage(Buffer.from(base64, 'base64'))
+      if (stored !== OverlayImageName.parse(name)) {
+        throw new DomainError('invalid_request', `The image ${name} doesn't match its name`)
+      }
+    }
+    return this.create(overlay)
   }
 
   private changed(id: string): Overlay {

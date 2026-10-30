@@ -1,13 +1,17 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   CLASSIC_OVERLAY,
+  createCore,
   DEFAULT_OVERLAY_ID,
   DomainError,
+  OverlayDocument,
   type Core,
-  type OverlayDocument,
   type StampedEvent,
 } from '../src'
-import { testCore } from './helpers'
+import { fakeYtm, testCore } from './helpers'
 
 let core: Core
 afterEach(() => core.close())
@@ -83,5 +87,61 @@ describe('OverlayService', () => {
     expect(() => core.overlays.delete(DEFAULT_OVERLAY_ID)).toThrow(
       expect.objectContaining({ type: 'invalid_request' }),
     )
+  })
+})
+
+describe('overlay images', () => {
+  // The smallest valid PNG header is enough: the type comes from the first bytes.
+  const png = (seed: number) =>
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, seed, seed + 1])
+  let dir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'halocline-images-'))
+    core = createCore({
+      dbPath: ':memory:',
+      ytm: fakeYtm(),
+      autoplay: false,
+      scanner: { artworkDir: dir },
+    })
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('stores images by content, beside the cover art, and checks what they are', async () => {
+    const name = await core.overlays.addImage(png(1))
+    expect(name).toMatch(/^[0-9a-f]{40}\.png$/)
+    expect(await core.overlays.addImage(png(1))).toBe(name)
+    expect(readFileSync(join(dir, name))).toEqual(Buffer.from(png(1)))
+    await expect(core.overlays.addImage(new TextEncoder().encode('<svg/>'))).rejects.toThrow(
+      /PNG, JPEG, WebP or GIF/,
+    )
+    await expect(core.overlays.addImage(new Uint8Array(11 * 1024 * 1024))).rejects.toThrow(/10 MB/)
+  })
+
+  it('exports an overlay with its images, and imports it whole elsewhere', async () => {
+    const logo = await core.overlays.addImage(png(1))
+    const mask = await core.overlays.addImage(png(2))
+    const doc: OverlayDocument = OverlayDocument.parse({
+      ...CLASSIC_OVERLAY,
+      elements: [
+        ...CLASSIC_OVERLAY.elements,
+        { type: 'image', id: 'logo', x: 0, y: 0, width: 50, height: 50, src: logo, mask },
+      ],
+    })
+    const overlay = core.overlays.create({ name: 'With logo', document: doc })
+    const file = JSON.parse(JSON.stringify(await core.overlays.exportFile(overlay.id))) as {
+      images: Record<string, string>
+    }
+    expect(Object.keys(file.images).sort()).toEqual([logo, mask].sort())
+
+    // Somewhere else: an empty image folder.
+    rmSync(dir, { recursive: true, force: true })
+    const imported = await core.overlays.importFile(file, 'x')
+    expect(imported).toMatchObject({ name: 'With logo', document: doc })
+    expect(readFileSync(join(dir, logo))).toEqual(Buffer.from(png(1)))
+
+    // An image under someone else's name is refused.
+    const forged = { ...file, images: { [logo]: Buffer.from(png(3)).toString('base64') } }
+    await expect(core.overlays.importFile(forged, 'x')).rejects.toThrow(/doesn't match its name/)
   })
 })

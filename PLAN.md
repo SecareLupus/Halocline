@@ -554,10 +554,11 @@ OverlayDocument {
   elements: OverlayElement[]      paint order: the first is at the back
 }
 
-every element: id, x, y, width, height, opacity
-  rect      fill, radius, borderWidth, borderColor
-  art       placeholder, radius, borderWidth, borderColor,
+every element: id, x, y, width, height, opacity, showWhen
+  rect      fill, radius, borderWidth, borderColor, shape, mask
+  art       placeholder, radius, borderWidth, borderColor, shape, mask,
             pausedShade, pauseSign (colour, or null for none)
+  image     src, fit (cover, contain, fill), radius, borderWidth, borderColor, shape, mask
   text      text (template), font, size, weight, color, align, shadow, minScale
   progress  fill, pausedFill, track, edge, radius
 ```
@@ -571,14 +572,36 @@ every element: id, x, y, width, height, opacity
   cover, the placeholder, the paused shade and the pause sign. On a progress bar it clips the
   played part too. `ROUND_RADIUS` (9999) is "fully round": CSS shrinks a radius too big for its
   box to fit, so it's a circle on a square and a pill on anything longer, whatever the size.
-  That's the circle mask for album art. Other shapes and image masks wait for images (stage E).
+  That's the circle mask for album art.
+- **Shapes:** panels, art and images can be clipped to a `shape` (hexagon, octagon, diamond,
+  triangle, star) by a clip path in percent of the box, so it fits any size. A border follows the
+  box, so a shape would cut it into pieces: the editor only offers borders on a box.
+- **Image masks:** `mask` names an uploaded image whose alpha clips the element (opaque shows,
+  transparent hides), stretched over it, as CSS `mask-image`. It's set on the property itself,
+  never through a custom property, so the URL resolves the same everywhere.
+- **Images** (`image` elements, and masks) are uploads: PNG, JPEG, WebP or GIF up to 10 MB,
+  recognised by their first bytes, never by name. They're stored by a SHA-1 of their bytes beside
+  the extracted cover art, so the API (`/v1/artwork/{name}`, for OBS) and the app
+  (`artwork://`) serve them already. Uploads: `POST /v1/overlays/images` (admin) or the editor's
+  Choose…, a file dialog. An image element with no image draws nothing; the editor outlines it.
 - **Borders** sit inside the box (art shrinks to make room), so a ring around round art doesn't
   change the element's size.
 - **Colours, fonts and shadows** are CSS values. The renderer sets them through the CSSOM, never
   by writing CSS text, so a document can't inject rules.
-- **Text templates:** `{title}`, `{artists}` (joined with ", ") and `{album}`. Anything else is
-  literal. A text element is one line, vertically centred in its box. Too long for its box, it
+- **Text templates:** `{title}`, `{artists}` (joined with ", "), `{album}` and `{requester}` for
+  the song playing, and `{next.title}`, `{next.artists}`, `{next.album}` and `{next.requester}`
+  for the one after it. A field with nothing to fill is empty; anything else is literal. Text
+  that changes without a track change (up next, after a queue edit) changes in place, without a
+  cross-fade. A text element is one line, vertically centred in its box. Too long for its box, it
   shrinks to fit, down to `minScale` of its size, before an ellipsis cuts it off.
+- **Show rules:** `showWhen` is `always`, `playing`, `paused`, `requested` (someone asked for the
+  song), `not-requested` or `has-next`. An element whose rule doesn't hold fades out, at the
+  overlay's fade speed. A "Requested by {requester}" line set to `requested` is the usual use.
+- **Data:** `PlayerState.current.requestedBy` is the queue item's requester, and
+  `PlayerState.next` is what plays after the current song: the queue's first, the shuffle pick
+  (picked once and kept, so it is what plays), or the same song on repeat-one. It carries the
+  song's id, title, artists and album and its requester, not the whole library record. It
+  follows queue edits: a change to it publishes `player.changed`.
 - **Versioning:** `version` is bumped on any change old documents need migrating for. Adding an
   optional field with a default isn't one.
 
@@ -663,17 +686,20 @@ A full-window view, opened from the top bar.
   quick nudges, merge into one. Loading another overlay, or a change made elsewhere, clears the
   history, so undo can't quietly revert someone else's edit.
 - **Import and export:** **Export…** saves the overlay as a JSON file
-  (`{ format: "halocline-overlay", version: 1, name, document }`); **Import…** makes a new overlay
+  (`{ format: "halocline-overlay", version: 1, name, document, images? }`, with the images it
+  uses); **Import…** makes a new overlay
   from such a file, or from a bare document (as `GET /v1/overlays/{id}` returns in `document`).
   Files are validated like any document, and a bad one is refused with the element and field
   named. The API needs nothing new for this: `GET /v1/overlays/{id}` exports and
   `POST /v1/overlays` imports.
 - **Properties:** the canvas size, fade and hide-when-paused; the element list (front first, with
   forward, backward and remove, and an Add menu); and the selected element's position, size,
-  opacity and its own fields. Corners have a **Round** box that sets `ROUND_RADIUS`; panels and
-  art have a border width, with its colour once it's above 0. Colours have a picker and an alpha slider beside the CSS value, so
-  anything a picker can't show (a gradient, say) can still be typed. Fonts suggest installed
-  families when Chromium can list them.
+  opacity, **Show** rule and its own fields. Corners have a **Round** box that sets
+  `ROUND_RADIUS`. Panels, art and images have a **Shape**, a border (on a box only) and a
+  **Mask**; images and masks are picked with **Choose…** and shown as thumbnails. Colours have a
+  picker and an alpha slider beside the CSS value, so anything a picker can't show (a gradient,
+  say) can still be typed. Fonts suggest installed families when Chromium can list them. The
+  preview's sample songs come with and without a requester and a next song, to try show rules.
 - **Saving:** edits save 400 ms after the last one, so open OBS sources redraw while you work.
   Each save carries the revision it was made from. If the overlay changed elsewhere first, the
   save fails and the editor offers to load the latest. With no unsaved edits, outside changes
@@ -730,9 +756,15 @@ Each stage builds on the document model, so none is thrown away.
   edge and centre snapping, a marquee), the maths is pure functions with unit tests
   (`packages/overlay/src/geometry.ts`), and it fits the scaled, percent-positioned preview
   without adapting a library to it.
-- **E. More elements:** up next, requester, the current lyric line, the pause note (§11), images
-  (stored content-addressed, like artwork), and a visualizer (needs frequency data from Halocline
-  over a WebSocket). A single-element document doubles as a widget URL.
+- **E. More elements** *(partly done)*: the requester and up next, show rules, images, shapes
+  and image masks, above. Export embeds the images an overlay uses (base64, by name), and import
+  stores them under the name their bytes give, so a file can't pass one image off as another.
+  Still to do, each needing a feature outside the overlay first:
+  - **Current lyric line:** synced lyrics (§11) aren't built yet.
+  - **Pause note:** not decided (§11).
+  - **Visualizer:** frequency data streamed from the player's audio graph over a WebSocket; new
+    audio plumbing, and some CPU while streaming.
+  - A single-element document already doubles as a widget URL.
 
 Fonts: the page's CSP blocks web fonts, but installed fonts work by name, and the editor can list
 them with `queryLocalFonts()`.
