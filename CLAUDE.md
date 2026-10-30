@@ -29,4 +29,7 @@
   `@halocline/overlay`, plain DOM with no framework. The API inlines that renderer into its page
   through a `?bundle` import (`scripts/vite-bundle.ts`, a Vite plugin in both electron-vite and
   the api Vitest config). Its pure parts live in `src/state.ts`, which is what's unit-tested.
+- The user manual is the GitHub wiki, and its source is `docs/wiki` (pages link without `.md`).
+  A change users would notice updates the manual in the same commit. Publish with
+  `GH_TOKEN=$(gh auth token --user SecareLupus) pnpm wiki:publish`.
 - Before calling something done: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.

@@ -20,7 +20,8 @@
     "test": "node scripts/electron-node.mjs node_modules/vitest/vitest.mjs run",
     "test:watch": "node scripts/electron-node.mjs node_modules/vitest/vitest.mjs",
     "licenses:check": "node scripts/check-licenses.mjs",
-    "test:stream": "pnpm build && electron apps/desktop --test-stream"
+    "test:stream": "pnpm build && electron apps/desktop --test-stream",
+    "wiki:publish": "node scripts/publish-wiki.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
