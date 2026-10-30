@@ -397,8 +397,8 @@ function ObsOverlay(props: { state: AppState }) {
       <h2>OBS overlay</h2>
       <p>
         Add a <strong>Browser Source</strong> in OBS and paste the overlay URL. It shows the current
-        song with its art and a progress bar on a transparent background, and hides itself when
-        nothing is playing or an ad is on.
+        song on a transparent background, and hides itself when nothing is playing or an ad is on.
+        Change its layout, or make more overlays, under <strong>Overlays</strong>.
       </p>
       <div class="button-row">
         <button type="button" onClick={() => void copy(false)}>
@@ -415,10 +415,10 @@ function ObsOverlay(props: { state: AppState }) {
       <Show when={copied()}>
         {(info) => (
           <p class="empty">
-            {rotated() ? 'New URL copied; the old one no longer works. ' : 'Copied. '}
-            Recommended source size: {info().width}×{info().height}. Colours, fonts and the bar can
-            be restyled in the source's Custom CSS (<code>--hl-text-color</code>,{' '}
-            <code>--hl-bar-color</code>, <code>--hl-font</code>, …).
+            {rotated()
+              ? 'New URL copied; the old ones no longer work, for every overlay. '
+              : 'Copied. '}
+            Set the source to {info().width}×{info().height}.
           </p>
         )}
       </Show>

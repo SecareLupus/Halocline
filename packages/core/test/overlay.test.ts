@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { CLASSIC_OVERLAY, OverlayDocument } from '../src'
+import { CLASSIC_OVERLAY, OVERLAY_TEMPLATES, OverlayDocument } from '../src'
 
 describe('OverlayDocument', () => {
   it('accepts Classic as it is', () => {
     expect(OverlayDocument.parse(CLASSIC_OVERLAY)).toEqual(CLASSIC_OVERLAY)
+  })
+
+  it('ships templates that validate as they are, with distinct ids', () => {
+    for (const template of OVERLAY_TEMPLATES) {
+      expect(OverlayDocument.parse(template.document)).toEqual(template.document)
+    }
+    expect(new Set(OVERLAY_TEMPLATES.map((t) => t.id)).size).toBe(OVERLAY_TEMPLATES.length)
   })
 
   it('fills in element styles an editor leaves out', () => {

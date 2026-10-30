@@ -626,15 +626,40 @@ and friends) are gone: the editor replaces them.
 
 ### Settings → Overlay
 
-A "Copy overlay URL" button. It creates the `overlay` token on first use, copies the URL, and
-shows the canvas size to set on the Browser Source.
+A "Copy overlay URL" button for the default overlay. It creates the `overlay` token on first use,
+copies the URL, and shows the canvas size to set on the Browser Source. It points to the
+Overlays view for editing.
+
+### Overlays view (the editor)
+
+A full-window view, opened from the top bar.
+- **List:** every overlay, the default first. **New overlay** starts from a template (Classic,
+  Pill, Card, Lower third; `OVERLAY_TEMPLATES` in core) with an optional name.
+- **Toolbar:** rename, **Copy OBS URL** (with the canvas size to set), and **Delete** (two clicks;
+  not on the default overlay).
+- **Preview:** the overlay drawn by the shared renderer on a checkerboard, so transparency shows,
+  up to twice its size. A switcher picks the song: sample states (playing, paused, long names, no
+  art) or what's playing now. Clicking an element selects it, and the selection is outlined.
+- **Properties:** the canvas size, fade and hide-when-paused; the element list (front first, with
+  forward, backward and remove, and an Add menu); and the selected element's position, size,
+  opacity and its own fields. Colours have a picker and an alpha slider beside the CSS value, so
+  anything a picker can't show (a gradient, say) can still be typed. Fonts suggest installed
+  families when Chromium can list them.
+- **Saving:** edits save 400 ms after the last one, so open OBS sources redraw while you work.
+  Each save carries the revision it was made from. If the overlay changed elsewhere first, the
+  save fails and the editor offers to load the latest. With no unsaved edits, outside changes
+  load by themselves. A document that doesn't validate isn't saved, and the editor says which
+  element and field are wrong. Element ids are checked before they're applied, because two
+  elements sharing an id couldn't be told apart.
 
 ### As built
 
 - `@halocline/overlay` (`packages/overlay`) is the renderer: plain DOM, no framework, so the OBS
   page stays light and the Solid editor can embed it. `mountOverlay(root, doc)` draws a document;
-  `connectLive` feeds it from the API; `src/state.ts` holds the pure parts (visibility, progress,
-  templates) and is unit-tested.
+  `connectLive` feeds it from the API. The pure parts are unit-tested: `src/state.ts`
+  (visibility, progress, templates), `src/editing.ts` (the editor's document changes and colour
+  parsing) and `src/samples.ts` (the preview's sample states). The OBS page's bundle imports
+  none of the editing code, so it stays free of zod.
 - The API inlines the renderer into the page as one script. `scripts/vite-bundle.ts` is a Vite
   plugin (used by electron-vite and Vitest alike) that turns an import ending in `?bundle` into
   the string of its Rolldown bundle.
@@ -669,9 +694,7 @@ Each stage builds on the document model, so none is thrown away.
   renderer. No visible change apart from the scaling rule.
 - **B. Storage, API and live updates** *(done)*: overlays stored and edited through the API and
   IPC, each at its own address, and OBS redraws as they change (see As built). No UI yet.
-- **C. Property-panel editor:** a Solid page with a few built-in templates (Classic plus two or
-  three), a property panel and a live preview through the same renderer. A sample-state switcher
-  covers the edge cases: playing, paused, a long title, no art, several artists.
+- **C. Property-panel editor** *(done)*: the Overlays view above.
 - **D. Freeform canvas:** drag, resize, snapping and multi-select with Moveable/Selecto; layer
   order; undo/redo as a stack of document patches; JSON import and export (validated, so an
   imported document can't break the page).

@@ -2,6 +2,7 @@ import { createSignal, Match, onCleanup, Show, Switch } from 'solid-js'
 import { ContextMenuHost } from './ContextMenu'
 import { History } from './History'
 import { NowPlaying } from './NowPlaying'
+import { OverlayEditor } from './OverlayEditor'
 import { PlayerView } from './PlayerView'
 import { QueueList } from './QueueList'
 import { Search } from './Search'
@@ -12,7 +13,7 @@ import { createAppState } from './store'
 /** Narrower than this, search and the queue stack, and the player bar gets compact. */
 const STACKED = '(max-width: 719px)'
 
-type View = 'main' | 'history' | 'settings' | 'player'
+type View = 'main' | 'history' | 'overlays' | 'settings' | 'player'
 
 export function App() {
   const state = createAppState()
@@ -61,6 +62,13 @@ export function App() {
             </button>
             <button
               type="button"
+              aria-pressed={view() === 'overlays'}
+              onClick={() => toggle('overlays')}
+            >
+              {view() === 'overlays' ? 'Close overlays' : 'Overlays'}
+            </button>
+            <button
+              type="button"
               aria-pressed={view() === 'settings'}
               onClick={() => toggle('settings')}
             >
@@ -88,6 +96,11 @@ export function App() {
         <Match when={view() === 'history'}>
           <main class="view">
             <History state={state} />
+          </main>
+        </Match>
+        <Match when={view() === 'overlays'}>
+          <main class="view">
+            <OverlayEditor state={state} />
           </main>
         </Match>
         <Match when={view() === 'settings'}>

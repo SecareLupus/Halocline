@@ -83,6 +83,8 @@ export function mountOverlay(
       const node = page.createElement('div')
       node.className = `hl-el hl-${element.id}`
       node.dataset.type = element.type
+      // The editor maps a click in its preview back to the element.
+      node.dataset.id = element.id
       canvas.append(node)
       const slots: HTMLElement[] = []
       if (element.type === 'art' || element.type === 'text') {

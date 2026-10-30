@@ -2,3 +2,5 @@
 export { mountOverlay, type MountOptions, type OverlayView } from './render'
 export { apiArtworkUrl, connectLive, type LiveOptions } from './live'
 export * from './state'
+export * from './editing'
+export * from './samples'

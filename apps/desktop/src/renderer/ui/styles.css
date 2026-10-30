@@ -774,3 +774,213 @@ h2 {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   border-radius: 6px;
 }
+
+/* Overlays (PLAN §8): the list beside the editor, which stacks on narrow windows. */
+.overlay-editor {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 719px) {
+  .overlay-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+h3 {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+
+.overlay-list .list li,
+.element-list li {
+  padding: 0;
+}
+
+.overlay-list li.selected,
+.element-list li.selected {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 6px;
+}
+
+/* A whole row as a button, with the track-style two lines. */
+button.element-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 0;
+  background: none;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+button.element-name span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.new-overlay select,
+.overlay-props select,
+.overlay-props input:not([type]),
+.overlay-props input[type='number'] {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  min-width: 0;
+}
+
+.overlay-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.overlay-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.overlay-toolbar .overlay-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.save-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.overlay-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+
+.segmented button {
+  border-radius: 0;
+  margin-left: -1px;
+  font-size: 12px;
+}
+
+.segmented button:first-child {
+  border-radius: 6px 0 0 6px;
+  margin-left: 0;
+}
+
+.segmented button:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.segmented button[aria-checked='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  position: relative;
+}
+
+/* A checkerboard behind the overlay, so its transparent parts read as transparent. */
+.overlay-stage {
+  position: relative;
+  background: repeating-conic-gradient(#8a9099 0 25%, #5f656d 0 50%) 0 0 / 16px 16px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.overlay-stage > div:first-child {
+  position: absolute;
+  inset: 0;
+}
+
+.overlay-selection {
+  position: absolute;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  pointer-events: none;
+}
+
+.overlay-props {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px 24px;
+  align-items: start;
+}
+
+.prop {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.prop > span:first-child {
+  color: var(--muted);
+}
+
+.prop-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.prop-pair .prop {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.prop-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.prop-inline input[type='number'] {
+  width: 64px;
+}
+
+.prop-inline input[type='range'] {
+  flex: 1;
+  min-width: 48px;
+}
+
+.color-prop input[type='color'] {
+  width: 32px;
+  height: 26px;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.color-prop input:not([type]) {
+  flex: 2;
+  min-width: 0;
+}
+
+.prop-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 6px;
+}

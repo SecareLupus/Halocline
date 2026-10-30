@@ -56,6 +56,9 @@ importers:
       '@halocline/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@halocline/overlay':
+        specifier: workspace:*
+        version: link:../../packages/overlay
       '@parcel/watcher':
         specifier: ^2.6.0
         version: 2.6.0
