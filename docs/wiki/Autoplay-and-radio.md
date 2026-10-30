@@ -1,5 +1,3 @@
-# Autoplay and radio
-
 ## Autoplay
 
 With autoplay on, Halocline adds songs similar to what's playing whenever the queue runs low, so

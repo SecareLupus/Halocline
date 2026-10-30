@@ -1,5 +1,3 @@
-# Troubleshooting
-
 ## Playback
 
 **YouTube Music songs are skipped.** Look in Settings → YouTube Music. If it says no playback engine

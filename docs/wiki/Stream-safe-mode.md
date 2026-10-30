@@ -1,5 +1,3 @@
-# Stream-safe mode
-
 Stream-safe mode makes sure only songs you've cleared for your stream can play: songs you know
 won't get a copyright strike, say, or that suit your audience.
 

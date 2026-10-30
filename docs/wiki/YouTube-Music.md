@@ -1,5 +1,3 @@
-# YouTube Music
-
 Halocline searches YouTube Music without an account. Sign in to play songs with your own account,
 so YouTube Music Premium applies.
 

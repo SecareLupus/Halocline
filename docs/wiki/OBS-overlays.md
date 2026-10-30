@@ -1,5 +1,3 @@
-# OBS overlays
-
 An overlay shows what's playing on your stream: album art, the artist and title, a progress bar,
 who requested the song, what's next. It's a web page you add to OBS as a **Browser Source**. Its
 background is see-through, so it sits over your scene.

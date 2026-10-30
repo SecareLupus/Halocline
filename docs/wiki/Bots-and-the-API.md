@@ -1,5 +1,3 @@
-# Bots and the API
-
 Everything Halocline does can also be done over its HTTP API: queue a song a viewer asked for,
 skip, pause, read what's playing, or follow along as things change. Stream bots, chat commands,
 Stream Deck plugins and your own scripts can all use it.

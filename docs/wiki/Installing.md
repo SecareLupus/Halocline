@@ -1,5 +1,3 @@
-# Installing
-
 Download Halocline from the [latest release](https://github.com/SecareLupus/Halocline/releases/latest).
 
 ## Linux

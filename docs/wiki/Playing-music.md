@@ -1,5 +1,3 @@
-# Playing music
-
 The main window has search on one side and the queue on the other, with the player bar along the
 bottom. Drag the line between search and the queue to resize them; double-click it to centre it.
 In a narrow window, search sits above the queue.

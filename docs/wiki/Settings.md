@@ -1,5 +1,3 @@
-# Settings
-
 Open **Settings** in the top bar. Changes apply straight away; there's nothing to save.
 
 ## Playback

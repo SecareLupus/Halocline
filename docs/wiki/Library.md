@@ -1,5 +1,3 @@
-# Library
-
 Your library is your music files plus any YouTube Music songs you've saved. Library songs come
 first in search, can be tagged [stream-safe](Stream-safe-mode), and are what autoplay draws on
 first.
