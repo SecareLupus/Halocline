@@ -4,6 +4,7 @@ import {
   SYSTEM_FONT,
   type OverlayDocument,
   type OverlayElement,
+  type ShowWhen,
 } from '@halocline/core/overlay'
 import {
   addElement,
@@ -23,6 +24,15 @@ const TYPE_LABEL = Object.fromEntries(ELEMENT_TYPES.map((t) => [t.type, t.label]
   ElementType,
   string
 >
+
+const SHOW_WHEN: { value: ShowWhen; label: string }[] = [
+  { value: 'always', label: 'Always' },
+  { value: 'playing', label: 'While playing' },
+  { value: 'paused', label: 'While paused' },
+  { value: 'requested', label: 'When someone requested the song' },
+  { value: 'not-requested', label: 'When nobody requested it' },
+  { value: 'has-next', label: "When there's a next song" },
+]
 
 const GENERIC_FONTS = [SYSTEM_FONT, 'system-ui', 'sans-serif', 'serif', 'monospace']
 
@@ -266,6 +276,14 @@ export function OverlayProperties(props: {
                 value={e().opacity}
                 onChange={(opacity) => setElement({ opacity })}
               />
+              <Prop label="Show" title="It fades in and out with the overlay's fade">
+                <select
+                  value={e().showWhen}
+                  onChange={(ev) => setElement({ showWhen: ev.currentTarget.value as ShowWhen })}
+                >
+                  <For each={SHOW_WHEN}>{(o) => <option value={o.value}>{o.label}</option>}</For>
+                </select>
+              </Prop>
               <ElementProps element={e()} onChange={setElement} />
             </>
           )}
@@ -333,12 +351,14 @@ function ElementProps(props: {
             <TextProp
               label="Text"
               value={e().text}
-              title="{title}, {artists} and {album} are filled in"
+              title="Fields in braces are filled in; see below"
               onChange={(text) => props.onChange({ text })}
             />
             <p class="prop-hint">
-              <code>{'{title}'}</code>, <code>{'{artists}'}</code> and <code>{'{album}'}</code> are
-              filled in.
+              <code>{'{title}'}</code>, <code>{'{artists}'}</code>, <code>{'{album}'}</code> and{' '}
+              <code>{'{requester}'}</code> are filled in; <code>{'{next.title}'}</code>,{' '}
+              <code>{'{next.artists}'}</code>, <code>{'{next.album}'}</code> and{' '}
+              <code>{'{next.requester}'}</code> for the song after it.
             </p>
             <TextProp
               label="Font"

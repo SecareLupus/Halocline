@@ -90,15 +90,44 @@ describe('PlayerService', () => {
 
   it('publishes track.changed only when the track changes', () => {
     const { enqueue } = setup()
+    enqueue('A')
     const types: string[] = []
     core.events.subscribe((e) => types.push(e.type))
-    enqueue('A')
     core.player.patch({ playing: true })
     core.player.report({ type: 'progress', positionMs: 1000, playing: true })
     expect(types.filter((t) => t.startsWith('player.') || t.startsWith('track.'))).toEqual([
       'track.changed',
       'player.changed',
     ])
+  })
+
+  it('names the requester and what plays next, following queue edits', () => {
+    const { enqueue } = setup()
+    const first = enqueue('A')
+    core.queue.add({ recordingId: song(core, 'B').id, origin: 'api', requestedBy: 'otter' })
+    expect(core.player.get().next).toMatchObject({
+      queueItemId: first.id,
+      recording: { title: 'A' },
+    })
+    core.player.patch({ playing: true })
+    expect(core.player.get().current?.requestedBy).toBeNull()
+    expect(core.player.get().next).toEqual({
+      queueItemId: expect.any(String),
+      recording: { id: expect.any(String), title: 'B', artists: ['Test Artist'], album: null },
+      requestedBy: 'otter',
+    })
+
+    // Queueing something to play next changes "up next" without a track change.
+    const events: string[] = []
+    core.events.subscribe((e) => events.push(e.type))
+    const c = enqueue('C')
+    core.queue.move(c.id, 'next')
+    expect(core.player.get().next?.recording.title).toBe('C')
+    expect(events).toContain('player.changed')
+    expect(events).not.toContain('track.changed')
+
+    core.player.patch({ repeat: 'one' })
+    expect(core.player.get().next?.recording.title).toBe('A')
   })
 
   it('configures the player on connect and when settings change', () => {

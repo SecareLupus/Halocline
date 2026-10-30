@@ -23,6 +23,11 @@ export const BASE_CSS = `
 :where(.hl-overlay) .hl-el {
   position: absolute;
   box-sizing: border-box;
+  transition: opacity var(--hl-fade) ease;
+}
+/* An element whose showWhen rule doesn't hold right now. */
+:where(.hl-overlay) .hl-el.hl-off {
+  opacity: 0;
 }
 /* Art and text keep two copies, and cross-fade between them on a track change. */
 :where(.hl-overlay) .hl-slot {

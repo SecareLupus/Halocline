@@ -6,9 +6,9 @@ import {
   isPaused,
   isShown,
   progress,
+  showsFor,
   trackKey,
   type OverlayState,
-  type OverlayTrack,
 } from './state'
 import { BASE_CSS } from './styles'
 
@@ -28,6 +28,7 @@ export interface OverlayView {
 /** An element as drawn, with the two copies that cross-fade between songs (art and text). */
 interface Drawn {
   element: OverlayElement
+  node: HTMLElement
   slots: HTMLElement[]
   fill: HTMLElement | null
 }
@@ -100,16 +101,16 @@ export function mountOverlay(
         element.type === 'progress'
           ? node.appendChild(withClass(page.createElement('div'), 'hl-fill'))
           : null
-      return { element, slots, fill }
+      return { element, node, slots, fill }
     })
     active = 0
     rescale()
-    const recording = state?.current?.recording
-    if (recording) showTrack(recording, false)
+    if (state?.current) showTrack(state, false)
   }
 
   // Cross-fade: fill the hidden copies, then swap which ones are shown.
-  function showTrack(track: OverlayTrack, fade: boolean) {
+  function showTrack(shown: OverlayState, fade: boolean) {
+    const track = shown.current!.recording
     const incoming = fade ? 1 - active : active
     for (const { element, slots } of drawn) {
       const slot = slots[incoming]
@@ -118,14 +119,28 @@ export function mountOverlay(
         const url = track.artwork ? artworkUrl(track.artwork) : null
         slot.style.backgroundImage = url ? `url("${url.replace(/"/g, '%22')}")` : ''
       } else if (element.type === 'text') {
-        const line = slot.firstElementChild as HTMLElement
-        line.textContent = formatText(element.text, track)
-        fit(line, element.minScale)
+        setLine(slot, element.text, element.minScale, shown)
       }
       slots[active]?.classList.remove('hl-active')
       slot.classList.add('hl-active')
     }
     active = incoming
+  }
+
+  function setLine(slot: HTMLElement, template: string, minScale: number, shown: OverlayState) {
+    const line = slot.firstElementChild as HTMLElement
+    const text = formatText(template, shown)
+    if (line.textContent === text) return
+    line.textContent = text
+    fit(line, minScale)
+  }
+
+  // The same song, but text can still change: up next follows the queue.
+  function refreshText(shown: OverlayState) {
+    for (const { element, slots } of drawn) {
+      const slot = slots[active]
+      if (element.type === 'text' && slot) setLine(slot, element.text, element.minScale, shown)
+    }
   }
 
   // A line too long for its box shrinks until it fits, but no further than its
@@ -157,7 +172,10 @@ export function mountOverlay(
     root.classList.toggle('hl-hidden', !isShown(state, current.hideAfterPausedMs, time))
     root.classList.toggle('hl-paused', isPaused(state))
     const ratio = progress(state, time)
-    for (const { fill } of drawn) if (fill) fill.style.width = ratio * 100 + '%'
+    for (const { element, node, fill } of drawn) {
+      if (fill) fill.style.width = ratio * 100 + '%'
+      node.classList.toggle('hl-off', !showsFor(element.showWhen, state))
+    }
   }
 
   function tick() {
@@ -187,8 +205,10 @@ export function mountOverlay(
       state = next
       const key = trackKey(next)
       if (next?.current && key !== shownKey) {
-        showTrack(next.current.recording, shownKey !== null)
+        showTrack(next, shownKey !== null)
         shownKey = key
+      } else if (next?.current) {
+        refreshText(next)
       }
       update()
     },

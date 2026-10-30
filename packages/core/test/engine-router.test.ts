@@ -21,6 +21,7 @@ const load = (engine: TrackLoad['engine'], startMs = 0): PlayerCommand => ({
     sourceId: 's',
     engine,
     recording: {} as never,
+    requestedBy: null,
   },
 })
 

@@ -6,6 +6,7 @@ import {
   progress,
   isPaused,
   isShown,
+  showsFor,
   trackKey,
   type OverlayState,
 } from '../src/state'
@@ -78,11 +79,43 @@ describe('trackKey', () => {
   })
 })
 
+const requested: OverlayState = {
+  ...playing,
+  current: { ...playing.current!, requestedBy: 'otter' },
+  next: {
+    queueItemId: 'q2',
+    recording: { title: 'Next', artists: ['C'], album: 'LP' },
+    requestedBy: null,
+  },
+}
+
 describe('formatText', () => {
   it('fills the known fields and leaves the rest', () => {
-    expect(formatText('{artists} — {title}', track)).toBe('A, B — Song')
-    expect(formatText('{album}', track)).toBe('')
-    expect(formatText('Now playing: {title} {year}', track)).toBe('Now playing: Song {year}')
+    expect(formatText('{artists} — {title}', playing)).toBe('A, B — Song')
+    expect(formatText('{album}', playing)).toBe('')
+    expect(formatText('Now playing: {title} {year}', playing)).toBe('Now playing: Song {year}')
+  })
+
+  it('fills the requester and the next song, empty when there are none', () => {
+    expect(formatText('Requested by {requester}', requested)).toBe('Requested by otter')
+    expect(formatText('Next: {next.artists} — {next.title} ({next.album})', requested)).toBe(
+      'Next: C — Next (LP)',
+    )
+    expect(formatText('{requester}|{next.title}|{next.requester}', playing)).toBe('||')
+  })
+})
+
+describe('showsFor', () => {
+  it('follows the playing state, the requester and the queue', () => {
+    expect(showsFor('always', null)).toBe(true)
+    expect(showsFor('playing', playing)).toBe(true)
+    expect(showsFor('paused', playing)).toBe(false)
+    expect(showsFor('paused', paused(0))).toBe(true)
+    expect(showsFor('requested', playing)).toBe(false)
+    expect(showsFor('requested', requested)).toBe(true)
+    expect(showsFor('not-requested', requested)).toBe(false)
+    expect(showsFor('has-next', playing)).toBe(false)
+    expect(showsFor('has-next', requested)).toBe(true)
   })
 })
 

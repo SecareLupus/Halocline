@@ -88,6 +88,11 @@ describe('sampleState', () => {
     })
     expect(sampleState('paused', now)).toMatchObject({ playing: false, pausedAt: now })
     expect(sampleState('no-art', now).current?.recording.artwork).toBeNull()
+    expect(sampleState('playing', now)).toMatchObject({
+      current: { requestedBy: 'SeaOtter42' },
+      next: { recording: { title: 'Thermocline' } },
+    })
+    expect(sampleState('paused', now)).toMatchObject({ current: { requestedBy: null }, next: null })
     expect(sampleState('long', now).current?.recording.artwork).toMatch(/^data:image\/svg\+xml,/)
   })
 })

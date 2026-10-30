@@ -9,6 +9,7 @@ import type {
   QueueItem,
   Settings,
   Source,
+  UpNext,
 } from '../schemas'
 import { chooseSource } from '../stream/source-choice'
 import type { TrackStore } from '../stream/track-cache'
@@ -119,10 +120,15 @@ export class PlayerService {
       shuffle: false,
       ad: false,
       current: null,
+      next: null,
     }
     events.subscribe((e) => {
       if (e.type === 'settings.changed') this.send({ type: 'configure', playback: e.data.playback })
-      if (e.type === 'queue.changed' && !this.busy) this.recue()
+      if (e.type === 'queue.changed' && !this.busy) {
+        this.recue()
+        // An overlay's "up next" follows queue edits, not just track changes.
+        if (!sameNext(this.state.next, this.upcoming())) this.update({})
+      }
       // Turning stream-safe mode on takes an untagged song off the air at once.
       if (e.type === 'settings.changed' && this.current && !this.allowed(this.current)) this.next()
     })
@@ -187,6 +193,18 @@ export class PlayerService {
     this.withQueue(() => this.queue.remove(picked.id))
     this.shufflePick = null
     return this.start(picked)
+  }
+
+  /** What plays after the current song, as the player will cue it (see `recue`). */
+  private upcoming(): UpNext | null {
+    const item = this.state.repeat === 'one' && this.current ? this.current : this.upNext()
+    if (!item) return null
+    const { id, title, artists, album } = item.recording
+    return {
+      queueItemId: item.id,
+      recording: { id, title, artists, album },
+      requestedBy: item.requestedBy,
+    }
   }
 
   /** What plays next: the head of the queue, or on shuffle a random song, picked once. */
@@ -442,6 +460,7 @@ export class PlayerService {
         recording: item.recording,
         sourceId: choice.source.id,
         engine: choice.engine,
+        requestedBy: item.requestedBy,
       },
     }
   }
@@ -469,6 +488,8 @@ export class PlayerService {
   private update(changes: Partial<PlayerState>, trackChanged = false): void {
     const was = this.state
     this.state = { ...was, ...changes }
+    // After the merge: repeat and shuffle change what's next.
+    this.state.next = this.upcoming()
     if (this.state.playing) this.state.pausedAt = null
     else if (was.playing || was.pausedAt === null) this.state.pausedAt = this.now()
     // Play history: the History page, and autoplay (PLAN §7) avoids recent artists and songs.
@@ -485,3 +506,8 @@ export class PlayerService {
     })
   }
 }
+
+const sameNext = (a: UpNext | null, b: UpNext | null) =>
+  a?.queueItemId === b?.queueItemId &&
+  a?.recording.title === b?.recording.title &&
+  a?.requestedBy === b?.requestedBy

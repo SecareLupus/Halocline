@@ -1,4 +1,5 @@
 // The renderer's pure parts (PLAN §8): what to show for a player state, and when.
+import type { ShowWhen } from '@halocline/core/overlay'
 
 /** The parts of `PlayerState` the overlay reads, so fixtures and previews stay small. */
 export interface OverlayTrack {
@@ -15,7 +16,17 @@ export interface OverlayState {
   positionAt: number
   pausedAt: number | null
   ad: boolean
-  current: { queueItemId: string; recording: OverlayTrack & { id: string } } | null
+  current: {
+    queueItemId: string
+    recording: OverlayTrack & { id: string }
+    requestedBy?: string | null
+  } | null
+  /** What plays after it; older servers leave it out. */
+  next?: {
+    queueItemId: string
+    recording: Pick<OverlayTrack, 'title' | 'artists' | 'album'>
+    requestedBy: string | null
+  } | null
 }
 
 /**
@@ -51,15 +62,44 @@ export function trackKey(state: OverlayState | null): string | null {
   return current ? current.queueItemId + ':' + current.recording.id : null
 }
 
-/** Fills `{title}`, `{artists}` and `{album}`; anything else is left as written. */
-export function formatText(template: string, track: OverlayTrack): string {
-  return template.replace(/\{(title|artists|album)\}/g, (_, field: string) =>
-    field === 'title'
-      ? track.title
-      : field === 'artists'
-        ? track.artists.join(', ')
-        : (track.album ?? ''),
+/**
+ * Fills the song's `{title}`, `{artists}`, `{album}` and `{requester}`, and the
+ * same for the next song as `{next.title}` and so on; anything else is left as
+ * written. A field with nothing to show is empty.
+ */
+export function formatText(template: string, state: OverlayState): string {
+  return template.replace(
+    /\{(next\.)?(title|artists|album|requester)\}/g,
+    (_, next: string | undefined, field: string) => {
+      const item = next ? state.next : state.current
+      if (!item) return ''
+      if (field === 'requester') return item.requestedBy ?? ''
+      const track = item.recording
+      return field === 'title'
+        ? track.title
+        : field === 'artists'
+          ? track.artists.join(', ')
+          : (track.album ?? '')
+    },
   )
+}
+
+/** Whether an element with this rule shows for a state (while the overlay itself shows). */
+export function showsFor(rule: ShowWhen, state: OverlayState | null): boolean {
+  switch (rule) {
+    case 'always':
+      return true
+    case 'playing':
+      return Boolean(state?.playing)
+    case 'paused':
+      return !state?.playing
+    case 'requested':
+      return Boolean(state?.current?.requestedBy)
+    case 'not-requested':
+      return !state?.current?.requestedBy
+    case 'has-next':
+      return Boolean(state?.next)
+  }
 }
 
 /**

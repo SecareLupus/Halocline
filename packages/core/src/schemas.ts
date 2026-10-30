@@ -292,8 +292,21 @@ export const NowPlaying = z.object({
   recording: Recording,
   sourceId: Id,
   engine: Engine,
+  /** Who asked for it (a bot passes the viewer's name), as on the queue item. */
+  requestedBy: z.string().nullable(),
 })
 export type NowPlaying = z.infer<typeof NowPlaying>
+
+/**
+ * What plays after the current song: the queue's first, the shuffle pick, or the
+ * same song on repeat-one. Only what an overlay shows (PLAN §8).
+ */
+export const UpNext = z.object({
+  queueItemId: Id,
+  recording: Recording.pick({ id: true, title: true, artists: true, album: true }),
+  requestedBy: z.string().nullable(),
+})
+export type UpNext = z.infer<typeof UpNext>
 
 export const PlayerState = z.object({
   playing: z.boolean(),
@@ -312,6 +325,7 @@ export const PlayerState = z.object({
   /** True while the fallback engine is playing an ad; never shown as the track. */
   ad: z.boolean(),
   current: NowPlaying.nullable(),
+  next: UpNext.nullable(),
 })
 export type PlayerState = z.infer<typeof PlayerState>
 

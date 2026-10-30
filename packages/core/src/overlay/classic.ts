@@ -18,6 +18,7 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
     {
       type: 'rect',
       id: 'panel',
+      showWhen: 'always',
       x: 0,
       y: 0,
       width: 375,
@@ -31,6 +32,7 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
     {
       type: 'art',
       id: 'art',
+      showWhen: 'always',
       x: 0,
       y: 0,
       width: 130,
@@ -46,6 +48,7 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
     {
       type: 'text',
       id: 'artist',
+      showWhen: 'always',
       x: 146,
       y: 40.7,
       width: 213,
@@ -63,6 +66,7 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
     {
       type: 'text',
       id: 'title',
+      showWhen: 'always',
       x: 146,
       y: 62.3,
       width: 213,
@@ -80,6 +84,7 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
     {
       type: 'progress',
       id: 'bar',
+      showWhen: 'always',
       x: 0,
       y: 130,
       width: 375,

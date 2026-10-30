@@ -1,5 +1,5 @@
 // Made-up player states for the editor's preview (PLAN §8), covering the cases
-// a layout has to survive.
+// a layout has to survive: with and without a requester and a next song too.
 import type { OverlayState, OverlayTrack } from './state'
 
 export type SampleName = 'playing' | 'paused' | 'long' | 'no-art'
@@ -22,6 +22,36 @@ const SAMPLE_ART =
       '<circle cx="50" cy="50" r="18" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="3"/>' +
       '</svg>',
   )
+
+/** Who asked for each sample song, and what plays after it. */
+const EXTRAS: Record<SampleName, Pick<OverlayState, 'next'> & { requestedBy: string | null }> = {
+  playing: {
+    requestedBy: 'SeaOtter42',
+    next: {
+      queueItemId: 'sample-next',
+      recording: {
+        title: 'Thermocline',
+        artists: ['The Deep Water Band'],
+        album: 'Fresh and Salt',
+      },
+      requestedBy: null,
+    },
+  },
+  paused: { requestedBy: null, next: null },
+  long: {
+    requestedBy: 'AnEspeciallyLongTwitchUsername_ThatKeepsGoing',
+    next: {
+      queueItemId: 'sample-next',
+      recording: {
+        title: 'Another Song Title That Is Much Too Long for Most Layouts (Live at the Pier)',
+        artists: ['Fourth Artist', 'Fifth Artist'],
+        album: null,
+      },
+      requestedBy: 'SecondLongViewerName',
+    },
+  },
+  'no-art': { requestedBy: null, next: null },
+}
 
 const TRACKS: Record<SampleName, OverlayTrack> = {
   playing: {
@@ -57,6 +87,7 @@ const TRACKS: Record<SampleName, OverlayTrack> = {
 /** A sample state, a third of the way through its song; `playing` moves on from `now`. */
 export function sampleState(name: SampleName, now = Date.now()): OverlayState {
   const track = TRACKS[name]
+  const { requestedBy, next } = EXTRAS[name]
   const playing = name !== 'paused'
   return {
     playing,
@@ -64,6 +95,11 @@ export function sampleState(name: SampleName, now = Date.now()): OverlayState {
     positionAt: now,
     pausedAt: playing ? null : now,
     ad: false,
-    current: { queueItemId: `sample-${name}`, recording: { id: `sample-${name}`, ...track } },
+    current: {
+      queueItemId: `sample-${name}`,
+      recording: { id: `sample-${name}`, ...track },
+      requestedBy,
+    },
+    next,
   }
 }

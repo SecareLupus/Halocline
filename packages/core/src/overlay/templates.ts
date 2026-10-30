@@ -12,6 +12,7 @@ export interface OverlayTemplate {
 const shadow = '0 1px 3px rgb(0 0 0 / 0.6)'
 const text = {
   type: 'text',
+  showWhen: 'always',
   opacity: 1,
   font: SYSTEM_FONT,
   weight: 400,
@@ -22,6 +23,7 @@ const text = {
 } as const
 const progress = {
   type: 'progress',
+  showWhen: 'always',
   opacity: 1,
   fill: '#5ccf9e',
   pausedFill: '#9aa3ad',
@@ -32,6 +34,7 @@ const progress = {
 const noBorder = { borderWidth: 0, borderColor: '#ffffff' } as const
 const art = {
   type: 'art',
+  showWhen: 'always',
   ...noBorder,
   opacity: 1,
   placeholder: 'rgb(255 255 255 / 0.15)',
@@ -48,6 +51,7 @@ const PILL: OverlayDocument = {
     {
       type: 'rect',
       id: 'panel',
+      showWhen: 'always',
       x: 0,
       y: 0,
       width: 420,
@@ -92,6 +96,7 @@ const CARD: OverlayDocument = {
     {
       type: 'rect',
       id: 'panel',
+      showWhen: 'always',
       x: 0,
       y: 0,
       width: 240,

@@ -26,9 +26,24 @@ const border = {
   borderColor: Css.default('#ffffff'),
 }
 
+/**
+ * When an element shows: always, or only in some states (it fades like the
+ * overlay). `requested` means someone asked for the song (`requestedBy`).
+ */
+export const ShowWhen = z.enum([
+  'always',
+  'playing',
+  'paused',
+  'requested',
+  'not-requested',
+  'has-next',
+])
+export type ShowWhen = z.infer<typeof ShowWhen>
+
 /** Position and size in canvas pixels. */
 const box = {
   id: OverlayElementId,
+  showWhen: ShowWhen.default('always'),
   x: z.number(),
   y: z.number(),
   width: z.number().positive(),
@@ -61,7 +76,11 @@ export const ArtElement = z.object({
 export const TextElement = z.object({
   type: z.literal('text'),
   ...box,
-  /** `{title}`, `{artists}` and `{album}` are filled in; anything else is literal. */
+  /**
+   * `{title}`, `{artists}`, `{album}` and `{requester}` are filled in for the song
+   * playing, and `{next.title}`, `{next.artists}`, `{next.album}` and
+   * `{next.requester}` for the one after it; anything else is literal.
+   */
   text: z.string().max(500).default('{title}'),
   font: Css.default(SYSTEM_FONT),
   /** Font size in canvas pixels. */
