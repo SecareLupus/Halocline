@@ -907,7 +907,6 @@ button.element-name span {
   position: relative;
   background: repeating-conic-gradient(#8a9099 0 25%, #5f656d 0 50%) 0 0 / 16px 16px;
   border: 1px solid var(--border);
-  cursor: pointer;
 }
 
 .overlay-stage > div:first-child {
@@ -990,4 +989,64 @@ button.element-name span {
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+}
+
+/*
+ * The editing surface around the canvas: room for a marquee, and handles on its
+ * edges. It reaches into the pane's padding (16px), and no further, so it never scrolls.
+ */
+.overlay-workspace {
+  padding: 16px;
+  margin: -8px -16px 0;
+  align-self: stretch;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.overlay-stage [data-id] {
+  cursor: move;
+}
+
+.overlay-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: 2px;
+  pointer-events: auto;
+}
+
+.overlay-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed #ff4fa3;
+  pointer-events: none;
+}
+
+.overlay-guide.vertical {
+  top: 0;
+  bottom: 0;
+  left: auto;
+  right: auto;
+  width: 0;
+  height: auto;
+  border-top: 0;
+  border-left: 1px dashed #ff4fa3;
+}
+
+.overlay-marquee {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  pointer-events: none;
+}
+
+.import-overlay {
+  margin-top: 12px;
+  width: 100%;
 }

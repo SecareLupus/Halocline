@@ -4,9 +4,11 @@ import {
   OverlayDocument,
   type Overlay,
 } from '@halocline/core/overlay'
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { DocumentHistory, removeElements, translateElements } from '@halocline/overlay'
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import type { OverlayInfo } from '../../shared/ipc'
 import { BridgeError, call } from './bridge'
+import type { EditOptions } from './overlay-edit'
 import { OverlayPreview } from './OverlayPreview'
 import { OverlayProperties } from './OverlayProperties'
 import type { AppState } from './store'
@@ -25,7 +27,12 @@ export function OverlayEditor(props: { state: AppState }) {
   const [overlays, setOverlays] = createSignal<Overlay[]>([])
   const [selectedId, setSelectedId] = createSignal(DEFAULT_OVERLAY_ID)
   const [draft, setDraft] = createSignal<OverlayDocument | null>(null)
-  const [element, setElement] = createSignal<string | null>(null)
+  const [selection, setSelection] = createSignal<string[]>([])
+  /** The selected elements that exist: an undo can take one away. */
+  const selected = createMemo(() => {
+    const ids = new Set(draft()?.elements.map((e) => e.id))
+    return selection().filter((id) => ids.has(id))
+  })
   const [status, setStatus] = createSignal<SaveStatus>('saved')
   const [issue, setIssue] = createSignal<string | null>(null)
   const [copied, setCopied] = createSignal<OverlayInfo | null>(null)
@@ -39,7 +46,14 @@ export function OverlayEditor(props: { state: AppState }) {
   let timer: ReturnType<typeof setTimeout> | undefined
   let saving = Promise.resolve()
 
-  const selected = () => overlays().find((o) => o.id === selectedId())
+  const current = () => overlays().find((o) => o.id === selectedId())
+
+  // Undo and redo for the overlay being edited; the version makes the buttons react.
+  const history = new DocumentHistory()
+  const [historyVersion, setHistoryVersion] = createSignal(0)
+  const historyChanged = () => setHistoryVersion((v) => v + 1)
+  const canUndo = () => (historyVersion(), history.canUndo)
+  const canRedo = () => (historyVersion(), history.canRedo)
 
   const replace = (overlay: Overlay) =>
     setOverlays((list) =>
@@ -51,6 +65,9 @@ export function OverlayEditor(props: { state: AppState }) {
   const load = (overlay: Overlay) => {
     revisions.set(overlay.id, overlay.revision)
     dirty = false
+    // Undoing past a document loaded from elsewhere would quietly revert it.
+    history.clear()
+    historyChanged()
     setDraft(overlay.document)
     setStatus('saved')
     setIssue(null)
@@ -59,10 +76,10 @@ export function OverlayEditor(props: { state: AppState }) {
   const select = (id: string) => {
     void save()
     setSelectedId(id)
-    setElement(null)
+    setSelection([])
     setCopied(null)
     setConfirmDelete(false)
-    const overlay = selected()
+    const overlay = current()
     if (overlay) load(overlay)
   }
 
@@ -76,7 +93,12 @@ export function OverlayEditor(props: { state: AppState }) {
     return where ? `${where}: ${message}` : message
   }
 
-  const edit = (next: OverlayDocument) => {
+  const edit = (next: OverlayDocument, options: EditOptions = {}) => {
+    const before = options.before ?? draft()
+    if (!options.live && before && before !== next) {
+      history.record(before, options.key)
+      historyChanged()
+    }
     setDraft(next)
     dirty = true
     clearTimeout(timer)
@@ -124,6 +146,68 @@ export function OverlayEditor(props: { state: AppState }) {
     })
     return saving
   }
+
+  const undo = () => {
+    const doc = draft()
+    const previous = doc && history.undo(doc)
+    if (!previous) return
+    historyChanged()
+    edit(previous, { live: true })
+  }
+  const redo = () => {
+    const doc = draft()
+    const next = doc && history.redo(doc)
+    if (!next) return
+    historyChanged()
+    edit(next, { live: true })
+  }
+
+  // Shortcuts, unless a field has the keyboard: it has its own undo and arrow keys.
+  const onKey = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement
+    if (target.closest('input, select, textarea, [contenteditable]')) return
+    const doc = draft()
+    if (!doc) return
+    const mod = e.ctrlKey || e.metaKey
+    const key = e.key.toLowerCase()
+    const ids = selected()
+    const step = e.shiftKey ? 10 : 1
+    const nudge = {
+      arrowleft: [-step, 0],
+      arrowright: [step, 0],
+      arrowup: [0, -step],
+      arrowdown: [0, step],
+    }[key]
+    if (mod && key === 'z' && e.shiftKey) redo()
+    else if (mod && key === 'z') undo()
+    else if (mod && key === 'y') redo()
+    else if (mod && key === 'a') setSelection(doc.elements.map((el) => el.id))
+    else if (key === 'escape') setSelection([])
+    else if ((key === 'delete' || key === 'backspace') && ids.length) {
+      edit(removeElements(doc, ids))
+      setSelection([])
+    } else if (nudge && ids.length) {
+      edit(translateElements(doc, ids, nudge[0]!, nudge[1]!), { key: `nudge:${ids.join()}` })
+    } else return
+    e.preventDefault()
+  }
+  window.addEventListener('keydown', onKey)
+  onCleanup(() => window.removeEventListener('keydown', onKey))
+
+  const exportOverlay = () =>
+    // eslint-disable-next-line solid/reactivity -- only called from event handlers
+    props.state.run(async () => {
+      await save()
+      await call('overlays.export', { id: selectedId() })
+    })
+  const importOverlay = () =>
+    // eslint-disable-next-line solid/reactivity -- only called from event handlers
+    props.state.run(async () => {
+      const imported = await call('overlays.import')
+      if (!imported) return
+      replace(imported)
+      select(imported.id)
+    })
 
   const reload = () =>
     // eslint-disable-next-line solid/reactivity -- only called from event handlers
@@ -259,6 +343,14 @@ export function OverlayEditor(props: { state: AppState }) {
             />
             <button type="submit">Create</button>
           </form>
+          <button
+            type="button"
+            class="import-overlay"
+            title="An overlay exported from Halocline, or a document from the API"
+            onClick={() => void importOverlay()}
+          >
+            Import…
+          </button>
         </aside>
 
         <Show when={draft()}>
@@ -268,14 +360,28 @@ export function OverlayEditor(props: { state: AppState }) {
                 <input
                   class="overlay-name"
                   aria-label="Overlay name"
-                  value={selected()?.name ?? ''}
+                  value={current()?.name ?? ''}
                   onChange={(e) => {
                     const name = e.currentTarget.value.trim()
                     if (name) void save(name)
                   }}
                 />
+                <button type="button" title="Undo (Ctrl+Z)" disabled={!canUndo()} onClick={undo}>
+                  Undo
+                </button>
+                <button
+                  type="button"
+                  title="Redo (Ctrl+Shift+Z)"
+                  disabled={!canRedo()}
+                  onClick={redo}
+                >
+                  Redo
+                </button>
                 <button type="button" onClick={() => void copy()}>
                   Copy OBS URL
+                </button>
+                <button type="button" title="Save to a file" onClick={() => void exportOverlay()}>
+                  Export…
                 </button>
                 <Show when={selectedId() !== DEFAULT_OVERLAY_ID}>
                   <button type="button" onClick={remove}>
@@ -304,14 +410,15 @@ export function OverlayEditor(props: { state: AppState }) {
               <OverlayPreview
                 doc={doc()}
                 player={props.state.player()}
-                selected={element()}
-                onSelect={setElement}
+                selection={selected()}
+                onSelect={setSelection}
+                onEdit={edit}
               />
               <OverlayProperties
                 doc={doc()}
-                selected={element()}
-                onSelect={setElement}
-                onChange={edit}
+                selection={selected()}
+                onSelect={setSelection}
+                onEdit={edit}
               />
             </div>
           )}

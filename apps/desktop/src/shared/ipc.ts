@@ -133,6 +133,10 @@ export interface IpcHandlers {
   'overlays.update': (args: { id: string; changes: OverlayUpdate; revision?: number }) => Overlay
   /** The default overlay can't be deleted. */
   'overlays.delete': (args: { id: string }) => void
+  /** Saves an overlay to a file the user picks; false if they cancel. */
+  'overlays.export': (args: { id: string }) => boolean
+  /** Creates an overlay from a file the user picks (an export, or a bare document); null if they cancel. */
+  'overlays.import': () => Overlay | null
 }
 
 export type IpcChannel = keyof IpcHandlers

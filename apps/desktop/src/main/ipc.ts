@@ -8,6 +8,8 @@ import {
   OverlayId,
   OverlayUpdate,
   PlayerPatch,
+  readOverlayFile,
+  toOverlayFile,
   QueuePosition,
   RecordingPatch,
   Scope,
@@ -18,6 +20,8 @@ import {
 } from '@halocline/core'
 import { overlayUrl } from '@halocline/api'
 import { BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
+import { readFile, writeFile } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { z } from 'zod'
 import {
   IPC,
@@ -212,6 +216,41 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
       return core.overlays.update(id, changes, revision)
     },
     'overlays.delete': (a) => core.overlays.delete(z.object({ id: OverlayId }).parse(a).id),
+    'overlays.export': async (a) => {
+      const overlay = core.overlays.get(z.object({ id: OverlayId }).parse(a).id)
+      const window = BrowserWindow.getFocusedWindow()
+      const options: Electron.SaveDialogOptions = {
+        title: 'Export overlay',
+        defaultPath: `${overlay.name.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'overlay'}.json`,
+        filters: [{ name: 'Halocline overlay', extensions: ['json'] }],
+      }
+      const { filePath, canceled } = window
+        ? await dialog.showSaveDialog(window, options)
+        : await dialog.showSaveDialog(options)
+      if (canceled || !filePath) return false
+      await writeFile(filePath, JSON.stringify(toOverlayFile(overlay), null, 2) + '\n')
+      return true
+    },
+    'overlays.import': async () => {
+      const window = BrowserWindow.getFocusedWindow()
+      const options: Electron.OpenDialogOptions = {
+        title: 'Import overlay',
+        properties: ['openFile'],
+        filters: [{ name: 'Halocline overlay', extensions: ['json'] }],
+      }
+      const { filePaths } = window
+        ? await dialog.showOpenDialog(window, options)
+        : await dialog.showOpenDialog(options)
+      const path = filePaths[0]
+      if (!path) return null
+      let data: unknown
+      try {
+        data = JSON.parse(await readFile(path, 'utf8'))
+      } catch {
+        throw new DomainError('invalid_request', `${basename(path)} isn't JSON`)
+      }
+      return core.overlays.create(readOverlayFile(data, basename(path).replace(/\.json$/i, '')))
+    },
   }
 
   ipcMain.handle(

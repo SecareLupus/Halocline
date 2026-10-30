@@ -67,6 +67,25 @@ export function removeElement(doc: OverlayDocument, id: string): OverlayDocument
   return { ...doc, elements: doc.elements.filter((e) => e.id !== id) }
 }
 
+export function removeElements(doc: OverlayDocument, ids: string[]): OverlayDocument {
+  return { ...doc, elements: doc.elements.filter((e) => !ids.includes(e.id)) }
+}
+
+/** Shifts elements by (dx, dy) canvas pixels. */
+export function translateElements(
+  doc: OverlayDocument,
+  ids: string[],
+  dx: number,
+  dy: number,
+): OverlayDocument {
+  return {
+    ...doc,
+    elements: doc.elements.map((e) =>
+      ids.includes(e.id) ? { ...e, x: e.x + dx, y: e.y + dy } : e,
+    ),
+  }
+}
+
 /** Moves an element towards the front (+1) or the back (-1) of the paint order. */
 export function moveElement(doc: OverlayDocument, id: string, by: 1 | -1): OverlayDocument {
   const from = doc.elements.findIndex((e) => e.id === id)

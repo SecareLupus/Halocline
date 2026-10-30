@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { CLASSIC_OVERLAY, OVERLAY_TEMPLATES, OverlayDocument } from '../src'
+import {
+  CLASSIC_OVERLAY,
+  OVERLAY_TEMPLATES,
+  OverlayDocument,
+  readOverlayFile,
+  toOverlayFile,
+  type Overlay,
+} from '../src'
 
 describe('OverlayDocument', () => {
   it('accepts Classic as it is', () => {
@@ -48,5 +55,39 @@ describe('OverlayDocument', () => {
     expect(OverlayDocument.safeParse(doc(['a', 'a'])).success).toBe(false)
     expect(OverlayDocument.safeParse(doc(['Title'])).success).toBe(false)
     expect(OverlayDocument.safeParse(doc(['x y'])).success).toBe(false)
+  })
+})
+
+describe('overlay files', () => {
+  const overlay: Overlay = {
+    id: 'x',
+    name: 'Stream',
+    revision: 3,
+    document: CLASSIC_OVERLAY,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+  }
+
+  it('round-trips an export, keeping the name and leaving out the id', () => {
+    const file = JSON.parse(JSON.stringify(toOverlayFile(overlay))) as unknown
+    expect(file).not.toHaveProperty('id')
+    expect(readOverlayFile(file, 'Imported')).toEqual({ name: 'Stream', document: CLASSIC_OVERLAY })
+  })
+
+  it('takes a bare document, named after the file', () => {
+    expect(readOverlayFile(CLASSIC_OVERLAY, 'classic')).toEqual({
+      name: 'classic',
+      document: CLASSIC_OVERLAY,
+    })
+  })
+
+  it('says what is wrong with anything else', () => {
+    expect(() => readOverlayFile({ hello: 'world' }, 'x')).toThrow(/Not a Halocline overlay/)
+    const broken = {
+      ...toOverlayFile(overlay),
+      document: { ...CLASSIC_OVERLAY, elements: [{ type: 'rect', id: 'Bad' }] },
+    }
+    expect(() => readOverlayFile(broken, 'x')).toThrow(/document › elements › 0/)
+    expect(() => readOverlayFile({ ...toOverlayFile(overlay), version: 2 }, 'x')).toThrow(/version/)
   })
 })

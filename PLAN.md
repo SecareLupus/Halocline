@@ -647,7 +647,27 @@ A full-window view, opened from the top bar.
   not on the default overlay).
 - **Preview:** the overlay drawn by the shared renderer on a checkerboard, so transparency shows,
   up to twice its size. A switcher picks the song: sample states (playing, paused, long names, no
-  art) or what's playing now. Clicking an element selects it, and the selection is outlined.
+  art) or what's playing now.
+- **Canvas editing**, in the preview:
+  - Click selects; Shift (or Ctrl) click adds or removes; a marquee dragged from empty space
+    (there's a margin around the canvas for it) selects whatever it touches.
+  - Drag moves the selection; a single selection has eight handles to resize it, and Shift on a
+    corner keeps its shape.
+  - Moving or resized edges, and the selection's centre, snap to the canvas edges and centre and
+    to the other elements' edges and centres, within 6 screen pixels; a dashed guide shows the
+    line. Alt turns snapping off. Positions move in whole canvas pixels.
+  - Keys, unless a field has focus: arrows nudge 1 px (Shift: 10), Delete removes, Escape
+    deselects, Ctrl+A selects all, Ctrl+Z undoes, Ctrl+Shift+Z or Ctrl+Y redoes.
+- **Undo and redo** (toolbar and keys): up to 100 steps per overlay, kept as whole documents
+  (they're small) rather than patches. A drag is one step; quick edits to the same field, or
+  quick nudges, merge into one. Loading another overlay, or a change made elsewhere, clears the
+  history, so undo can't quietly revert someone else's edit.
+- **Import and export:** **Export…** saves the overlay as a JSON file
+  (`{ format: "halocline-overlay", version: 1, name, document }`); **Import…** makes a new overlay
+  from such a file, or from a bare document (as `GET /v1/overlays/{id}` returns in `document`).
+  Files are validated like any document, and a bad one is refused with the element and field
+  named. The API needs nothing new for this: `GET /v1/overlays/{id}` exports and
+  `POST /v1/overlays` imports.
 - **Properties:** the canvas size, fade and hide-when-paused; the element list (front first, with
   forward, backward and remove, and an Add menu); and the selected element's position, size,
   opacity and its own fields. Corners have a **Round** box that sets `ROUND_RADIUS`; panels and
@@ -667,7 +687,8 @@ A full-window view, opened from the top bar.
   page stays light and the Solid editor can embed it. `mountOverlay(root, doc)` draws a document;
   `connectLive` feeds it from the API. The pure parts are unit-tested: `src/state.ts`
   (visibility, progress, templates), `src/editing.ts` (the editor's document changes and colour
-  parsing) and `src/samples.ts` (the preview's sample states). The OBS page's bundle imports
+  parsing), `src/geometry.ts` (hit testing, marquee, snapping, resizing), `src/history.ts` (undo)
+  and `src/samples.ts` (the preview's sample states). The OBS page's bundle imports
   none of the editing code, so it stays free of zod.
 - The API inlines the renderer into the page as one script. `scripts/vite-bundle.ts` is a Vite
   plugin (used by electron-vite and Vitest alike) that turns an import ending in `?bundle` into
@@ -704,9 +725,11 @@ Each stage builds on the document model, so none is thrown away.
 - **B. Storage, API and live updates** *(done)*: overlays stored and edited through the API and
   IPC, each at its own address, and OBS redraws as they change (see As built). No UI yet.
 - **C. Property-panel editor** *(done)*: the Overlays view above.
-- **D. Freeform canvas:** drag, resize, snapping and multi-select with Moveable/Selecto; layer
-  order; undo/redo as a stack of document patches; JSON import and export (validated, so an
-  imported document can't break the page).
+- **D. Freeform canvas** *(done)*: canvas editing, undo and redo, import and export, above.
+  Built by hand rather than with Moveable/Selecto: the needs were narrow (move, eight handles,
+  edge and centre snapping, a marquee), the maths is pure functions with unit tests
+  (`packages/overlay/src/geometry.ts`), and it fits the scaled, percent-positioned preview
+  without adapting a library to it.
 - **E. More elements:** up next, requester, the current lyric line, the pause note (§11), images
   (stored content-addressed, like artwork), and a visualizer (needs frequency data from Halocline
   over a WebSocket). A single-element document doubles as a widget URL.

@@ -11,11 +11,13 @@ import {
   moveElement,
   parseRgb,
   removeElement,
+  removeElements,
   rgbCss,
   updateElement,
   type ElementType,
 } from '@halocline/overlay'
 import { createSignal, For, Match, onMount, Show, Switch, type JSX } from 'solid-js'
+import type { OnEdit } from './overlay-edit'
 
 const TYPE_LABEL = Object.fromEntries(ELEMENT_TYPES.map((t) => [t.type, t.label])) as Record<
   ElementType,
@@ -51,21 +53,34 @@ function readColor(value: string): { hex: string; alpha: number } | null {
   return parseRgb(computed)
 }
 
-/** The overlay's own settings, its elements, and the selected element's properties. */
+/**
+ * The overlay's own settings, its elements, and the selected element's
+ * properties. Quick changes to one field are one undo step.
+ */
 export function OverlayProperties(props: {
   doc: OverlayDocument
-  selected: string | null
-  onSelect: (id: string | null) => void
-  onChange: (doc: OverlayDocument) => void
+  selection: string[]
+  onSelect: (ids: string[]) => void
+  onEdit: OnEdit
 }) {
   const [adding, setAdding] = createSignal<ElementType>('text')
-  const element = () => props.doc.elements.find((e) => e.id === props.selected)
-  const set = (changes: Partial<OverlayDocument>) => props.onChange({ ...props.doc, ...changes })
+  const single = () => (props.selection.length === 1 ? props.selection[0]! : null)
+  const element = () => props.doc.elements.find((e) => e.id === single())
+  const set = (changes: Partial<OverlayDocument>) =>
+    props.onEdit({ ...props.doc, ...changes }, { key: `overlay:${Object.keys(changes).join()}` })
   const setElement = (changes: Partial<OverlayElement>) => {
-    const id = props.selected
+    const id = single()
     if (!id) return
-    props.onChange(updateElement(props.doc, id, changes))
-    if (changes.id !== undefined) props.onSelect(changes.id)
+    props.onEdit(updateElement(props.doc, id, changes), {
+      key: `${id}:${Object.keys(changes).join()}`,
+    })
+    if (changes.id !== undefined) props.onSelect([changes.id])
+  }
+  // Shift or Ctrl adds to the selection, as in the preview.
+  const pick = (id: string, e: MouseEvent) => {
+    if (!(e.shiftKey || e.ctrlKey || e.metaKey)) return props.onSelect([id])
+    const ids = props.selection
+    props.onSelect(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id])
   }
   onMount(loadFonts)
   // Ids are checked before they're applied: with two elements sharing one, edits
@@ -73,7 +88,7 @@ export function OverlayProperties(props: {
   const idProblem = (id: string) =>
     !OverlayElementId.safeParse(id).success
       ? 'Lowercase letters, digits and dashes, starting with a letter'
-      : id !== props.selected && props.doc.elements.some((e) => e.id === id)
+      : id !== single() && props.doc.elements.some((e) => e.id === id)
         ? `Another element is already "${id}"`
         : null
 
@@ -133,8 +148,8 @@ export function OverlayProperties(props: {
         <ul class="list element-list">
           <For each={[...props.doc.elements].reverse()}>
             {(e) => (
-              <li classList={{ selected: e.id === props.selected }}>
-                <button type="button" class="element-name" onClick={() => props.onSelect(e.id)}>
+              <li classList={{ selected: props.selection.includes(e.id) }}>
+                <button type="button" class="element-name" onClick={(ev) => pick(e.id, ev)}>
                   <span class="title">{e.id}</span>
                   <span class="artist">{TYPE_LABEL[e.type]}</span>
                 </button>
@@ -143,7 +158,7 @@ export function OverlayProperties(props: {
                     type="button"
                     class="quiet"
                     title="Bring forward"
-                    onClick={() => props.onChange(moveElement(props.doc, e.id, 1))}
+                    onClick={() => props.onEdit(moveElement(props.doc, e.id, 1))}
                   >
                     ↑
                   </button>
@@ -151,7 +166,7 @@ export function OverlayProperties(props: {
                     type="button"
                     class="quiet"
                     title="Send backward"
-                    onClick={() => props.onChange(moveElement(props.doc, e.id, -1))}
+                    onClick={() => props.onEdit(moveElement(props.doc, e.id, -1))}
                   >
                     ↓
                   </button>
@@ -160,8 +175,8 @@ export function OverlayProperties(props: {
                     class="quiet"
                     title="Remove"
                     onClick={() => {
-                      props.onChange(removeElement(props.doc, e.id))
-                      if (e.id === props.selected) props.onSelect(null)
+                      props.onEdit(removeElement(props.doc, e.id))
+                      props.onSelect(props.selection.filter((id) => id !== e.id))
                     }}
                   >
                     ✕
@@ -182,8 +197,8 @@ export function OverlayProperties(props: {
             type="button"
             onClick={() => {
               const added = addElement(props.doc, adding())
-              props.onChange(added.doc)
-              props.onSelect(added.id)
+              props.onEdit(added.doc)
+              props.onSelect([added.id])
             }}
           >
             Add
@@ -194,7 +209,28 @@ export function OverlayProperties(props: {
       <section>
         <Show
           when={element()}
-          fallback={<p class="empty">Select an element, here or in the preview.</p>}
+          fallback={
+            <Show
+              when={props.selection.length > 1}
+              fallback={<p class="empty">Select an element, here or in the preview.</p>}
+            >
+              <h3>{props.selection.length} elements</h3>
+              <p class="prop-hint">
+                Drag them together in the preview, or nudge them with the arrow keys.
+              </p>
+              <div class="button-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.onEdit(removeElements(props.doc, props.selection))
+                    props.onSelect([])
+                  }}
+                >
+                  Remove them
+                </button>
+              </div>
+            </Show>
+          }
         >
           {(e) => (
             <>
