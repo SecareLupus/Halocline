@@ -2,7 +2,7 @@
   "name": "@halocline/desktop",
   "productName": "Halocline",
   "desktopName": "halocline.desktop",
-  "version": "0.2.0-rc.1",
+  "version": "0.2.0-rc.2",
   "private": true,
   "type": "module",
   "description": "Desktop music player for live streaming.",
