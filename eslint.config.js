@@ -19,5 +19,9 @@ export default tseslint.config(
     ...solid,
     languageOptions: { globals: { ...globals.browser } },
   },
+  {
+    files: ['packages/overlay/src/**/*.ts'],
+    languageOptions: { globals: { ...globals.browser } },
+  },
   prettier,
 )

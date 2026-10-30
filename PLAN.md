@@ -27,11 +27,12 @@ A desktop music player for live streaming:
 6. **Autoplay** (a setting, on by default) adds songs *similar to what's playing* to the end of
    the queue.
 7. **One API**, designed for this app, with a live event stream.
-8. A built-in **OBS now-playing overlay** (§8): a fixed layout served as a Browser Source page.
+8. A built-in **OBS now-playing overlay** (§8), served as a Browser Source page. Its layout is a
+   document, so it can be customized (the editor is staged in §8).
 
 Non-goals for the MVP: the Pear-parity integrations (ad blocking, SponsorBlock, Tuna, synced
-lyrics, Discord Rich Presence), an overlay editor, Twitch chat integration, providers other than
-YTM, mobile apps. All of these are on the Planned TODO list (§11).
+lyrics, Discord Rich Presence), Twitch chat integration, providers other than YTM, mobile apps.
+All of these are on the Planned TODO list (§11).
 
 ## 2. Architecture
 
@@ -531,13 +532,48 @@ fit a GPLv3 app. Instead, with nothing native or Python:
 - **Packaging:** Vite bundles essentia.js and ONNX Runtime into the analysis page, so their
   node_modules copies (150 MB) are left out of the app (`electron-builder.yml`).
 
-## 8. OBS now-playing overlay (hardcoded layout)
+## 8. OBS now-playing overlay
 
-A single page served by the API server at `/overlay/now-playing?token=<overlay token>`. It's added
-to OBS as a **Browser Source**. The background is transparent and the layout fills whatever size
-the source is set to. Recommended size: 375×140.
+An overlay is a **document**: a JSON description of a fixed-size canvas and the elements on it.
+One renderer draws a document, both in OBS and (later) in the editor's preview, so the editor
+can't drift from what OBS shows. Halocline ships one document, **Classic**, and serves it at
+`/overlay/now-playing?token=<overlay token>`. It's added to OBS as a **Browser Source** with a
+transparent background.
 
-**Layout:**
+### Document
+
+`OverlayDocument` (zod, `packages/core/src/overlay`):
+
+```
+OverlayDocument {
+  version: 1
+  canvas: { width, height }       design size in px (Classic: 375×140)
+  fadeMs                          show/hide and track-change cross-fade (300)
+  hideAfterPausedMs | null        a pause this long reads as stopped (5 minutes)
+  elements: OverlayElement[]      paint order: the first is at the back
+}
+
+every element: id, x, y, width, height, opacity
+  rect      fill, radius
+  art       placeholder, radius, pausedShade, pauseSign (colour, or null for none)
+  text      text (template), font, size, weight, color, align, shadow, minScale
+  progress  fill, pausedFill, track, edge
+```
+
+- **Geometry** is in canvas pixels. The page scales the whole canvas to fit the source, keeping
+  its aspect ratio, anchored top-left. Set the Browser Source to the canvas size and it's 1:1.
+  A source of another shape gets the canvas scaled, not reflowed.
+- **Ids** are short slugs (`[a-z][a-z0-9-]*`), unique in the document. Each element gets the class
+  `hl-<id>`, so OBS Custom CSS can target it.
+- **Colours, fonts and shadows** are CSS values. The renderer sets them through the CSSOM, never
+  by writing CSS text, so a document can't inject rules.
+- **Text templates:** `{title}`, `{artists}` (joined with ", ") and `{album}`. Anything else is
+  literal. A text element is one line, vertically centred in its box. Too long for its box, it
+  shrinks to fit, down to `minScale` of its size, before an ellipsis cuts it off.
+- **Versioning:** `version` is bumped on any change old documents need migrating for. Adding an
+  optional field with a default isn't one.
+
+### Classic
 
 ```
 ┌──────────┬───────────────────────────────────────────┐
@@ -548,55 +584,60 @@ the source is set to. Recommended size: 375×140.
 █████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ← progress bar
 ```
 
-- **Progress bar:** the full width of the source, along the bottom edge, 10 px tall. The whole
-  track always shows (dark and translucent with a light edge, so it reads on any scene); the
-  played part fills in seafoam, Halocline's accent.
-- **Album art:** a square pushed all the way left. It fills the height from the top of the source
-  to the top of the bar, up to the layout's design height (140 px less the bar,
-  `--hl-art-max-size`), so a tall source doesn't blow it up.
-- **Text:** two rows to the right of the art, vertically centered above the bar.
-  - Row 1 is **Artist**; multiple artists are joined with ", ".
-  - Row 2 is **Song Title**.
-  - Each row is a single line. A row too long for it shrinks to fit, down to
-    `--hl-min-font-scale` (0.75) of its size, before an ellipsis cuts it off.
-  - Font size scales with the source height, and with the width for narrow sources
-    (`--hl-font-size` overrides it).
+- **Panel** (`panel`): 375×130 behind the art and text, black at 70%, so the scene shows through
+  faintly while the text stays legible.
+- **Art** (`art`): 130×130 at the left edge. Missing art shows a neutral placeholder.
+- **Artist** (`artist`) and **title** (`title`): one line each, 146 px from the left with a 16 px
+  right margin, centred together above the bar. The title is 22.5 px semibold, the artist 18 px at
+  85% opacity, both with a soft shadow.
+- **Progress bar** (`bar`): the full width along the bottom, 10 px tall. The whole track always
+  shows (dark and translucent with a light edge, so it reads on any scene); the played part fills
+  in seafoam, Halocline's accent.
 
-**Behaviour:**
+### Behaviour
+
+The same for every document:
 - **Data:** on load the page fetches `GET /v1/player`, then subscribes to `/v1/events` for
   `player.changed` and `track.changed`. If the connection drops, it reconnects and fetches the
   state again.
 - **Progress:** events carry `positionMs` plus a timestamp, and the page moves the bar forward
   locally between events. It stays smooth with no per-frame events, and resyncs on every event
   (seeks included).
-- **Paused:** the bar freezes and its fill turns grey; the art darkens under a white pause sign.
-  The song and its progress stay.
-- **Stopped:** paused for more than five minutes reads as stopped, and the overlay fades out. That
-  covers the start of a stream (Halocline has been idle at least that long) without a switch to
-  remember; guessing wrong only hides the overlay early. `PlayerState.pausedAt` (when playback
-  paused, null while playing) lets a page loaded mid-pause tell how long it's been.
-- **Track change:** art and text cross-fade (about 300 ms).
+- **Paused:** progress fills turn `pausedFill` and freeze; art darkens under `pausedShade` with
+  a pause sign. The song and its progress stay.
+- **Stopped:** paused for longer than `hideAfterPausedMs` reads as stopped, and the overlay fades
+  out. That covers the start of a stream (Halocline has been idle at least that long) without a
+  switch to remember; guessing wrong only hides the overlay early. `PlayerState.pausedAt` (when
+  playback paused, null while playing) lets a page loaded mid-pause tell how long it's been.
+- **Track change:** art and text cross-fade. Each keeps two copies, and the hidden one is filled
+  before they swap.
 - **Nothing playing, or a fallback-engine ad:** the whole overlay fades out.
-- **Panel:** art and text sit on a dark panel at 70% opacity, so the scene shows through faintly
-  while the text stays legible. Art and text are fully opaque.
-- **Missing art:** a neutral placeholder.
 
-**Restyling without an editor:**
-- Elements have stable class names, and colours, fonts and sizes are CSS custom properties
-  (`--hl-font`, `--hl-text-color`, `--hl-bar-color`, `--hl-bar-track-color`,
-  `--hl-bar-edge-color`, `--hl-bar-height`, `--hl-bar-paused-color`, `--hl-panel-color`,
-  `--hl-paused-art-shade`, `--hl-pause-sign-color`, `--hl-art-max-size`, `--hl-gap`,
-  `--hl-min-font-scale`).
-- OBS's Browser Source has a **Custom CSS** field, so these can be overridden per scene without
-  touching Halocline.
+### Restyling from OBS
 
-**Settings → Overlay:** a "Copy overlay URL" button. It creates the `overlay` token on first use,
-copies the URL, and shows the recommended size.
+OBS's Browser Source has a **Custom CSS** field. Elements keep their `hl-<id>` classes, and the
+renderer's own rules go first in `<head>` with the lowest specificity that works, so a Custom CSS
+rule like `.hl-title { color: gold }` wins. Classic's ids match the old page's classes (`.hl-art`,
+`.hl-artist`, `.hl-title`, `.hl-bar`). The old page's CSS custom properties (`--hl-bar-color`
+and friends) are gone: the editor replaces them.
 
-**As built:**
-- The page is `packages/api/src/overlay/now-playing.html`.
-- Its CSP allows only its own inline script, by hash. Styles stay open, because OBS injects
-  Custom CSS as a `<style>` element.
+### Settings → Overlay
+
+A "Copy overlay URL" button. It creates the `overlay` token on first use, copies the URL, and
+shows the canvas size to set on the Browser Source.
+
+### As built
+
+- `@halocline/overlay` (`packages/overlay`) is the renderer: plain DOM, no framework, so the OBS
+  page stays light and the Solid editor can embed it. `mountOverlay(root, doc)` draws a document;
+  `connectLive` feeds it from the API; `src/state.ts` holds the pure parts (visibility, progress,
+  templates) and is unit-tested.
+- The API inlines the renderer into the page as one script. `scripts/vite-bundle.ts` is a Vite
+  plugin (used by electron-vite and Vitest alike) that turns an import ending in `?bundle` into
+  the string of its Rolldown bundle.
+- The page's CSP allows only that inline script, by hash. Styles stay open, because OBS injects
+  Custom CSS as a `<style>` element. The document travels in the page as a JSON data block,
+  which isn't executed.
 - `Referrer-Policy: no-referrer` keeps the token out of image requests.
 - Local cover art comes from `GET /v1/artwork/{hash}` (`read` or `overlay` scope). YouTube Music
   art loads directly from Google's image hosts.
@@ -608,8 +649,36 @@ copies the URL, and shows the recommended size.
 - Clocks: the bar extrapolates from `positionAt`. That's safe because the API binds to loopback,
   so OBS runs on the same machine.
 
-**Extension points** (used by the API and overlay now, and by the planned integrations later):
-integrations attach to internal hooks, so adding one doesn't touch core code.
+### Editor roadmap
+
+Each stage builds on the document model, so none is thrown away.
+
+- **A. Document and renderer** *(done)*: the model above, Classic as a document, the shared
+  renderer. No visible change apart from the scaling rule.
+- **B. Storage, API and live updates:**
+  - An `overlays` table (id, name, document, `revision`), not part of `Settings`: a document is
+    replaced whole, and settings patches merge field by field.
+  - `/v1/overlays` CRUD (admin) plus the matching IPC, each validated with `OverlayDocument`.
+  - Each overlay at `/overlay/{id}?token=…`. `/overlay/now-playing` stays as the default
+    overlay's address. The page loads its document from the API rather than having it inlined.
+  - An `overlay.changed` event, so OBS redraws while you edit.
+- **C. Property-panel editor:** a Solid page with a few built-in templates (Classic plus two or
+  three), a property panel and a live preview through the same renderer. A sample-state switcher
+  covers the edge cases: playing, paused, a long title, no art, several artists.
+- **D. Freeform canvas:** drag, resize, snapping and multi-select with Moveable/Selecto; layer
+  order; undo/redo as a stack of document patches; JSON import and export (validated, so an
+  imported document can't break the page).
+- **E. More elements:** up next, requester, the current lyric line, the pause note (§11), images
+  (stored content-addressed, like artwork), and a visualizer (needs frequency data from Halocline
+  over a WebSocket). A single-element document doubles as a widget URL.
+
+Fonts: the page's CSP blocks web fonts, but installed fonts work by name, and the editor can list
+them with `queryLocalFonts()`.
+
+### Extension points
+
+Used by the API and overlay now, and by the planned integrations later: integrations attach to
+internal hooks, so adding one doesn't touch core code.
 - Lifecycle: `onTrackChange`, `onPlayerChange`, `onQueueChange`.
 - `registerRoutes(scope)`.
 - A zod settings schema, from which the settings UI is generated.
@@ -699,18 +768,7 @@ Each attaches through the §8 extension points.
 - **Media controls polish:** full MPRIS (Linux) and SMTC (Windows) beyond Electron's built-in
   `mediaSession`.
 
-**Overlay builder (WYSIWYG editor):** a staged path, where each stage reuses the previous one.
-1. **Widget library:** each element (art, title, artist, progress, current lyric line, up next,
-   requester) at its own URL, with OBS handling layout.
-2. **Template customizer:** a few full layouts, edited through a property panel with a live
-   preview using sample data.
-3. **Full editor:**
-   - Overlays stored as JSON documents, drawn by one shared component in both the editor and OBS,
-     so the editor can't drift from what OBS shows.
-   - Built on plain HTML/CSS, with Moveable/Selecto for drag, resize, snapping and selection.
-   - Elements bound to data fields, with conditional visibility and track-change animations.
-   - Undo/redo and import/export.
-4. **Visualizer widget:** needs frequency data streamed from Halocline over WebSocket.
+**Overlay editor:** in progress; the stages are in §8 (Editor roadmap).
 
 **Other:**
 - **Autoplay blocklist:** block artists, songs or albums from autoplay (and Start radio), separate

@@ -25,4 +25,8 @@
   `main/analysis.ts`. Bump `ANALYSIS_VERSION` (`services/analysis.ts`) whenever results would
   change, so old ones are redone. `@halocline/analysis` must stay pure (no Node or DOM APIs): it's
   bundled into that page and tested under Vitest.
+- The OBS overlay (PLAN §8) is a document (`OverlayDocument`, `packages/core/src/overlay`) drawn by
+  `@halocline/overlay`, plain DOM with no framework. The API inlines that renderer into its page
+  through a `?bundle` import (`scripts/vite-bundle.ts`, a Vite plugin in both electron-vite and
+  the api Vitest config). Its pure parts live in `src/state.ts`, which is what's unit-tested.
 - Before calling something done: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.

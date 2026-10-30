@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@halocline/core": "workspace:*",
+    "@halocline/overlay": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",
     "hono": "^4.13.14",

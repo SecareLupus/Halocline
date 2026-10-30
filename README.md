@@ -30,6 +30,7 @@ pnpm dist:linux   # AppImage + .deb in apps/desktop/release/
 | `packages/core`     | Domain layer: zod schemas, SQLite store, library, queue, player, tokens, health         |
 | `packages/api`      | HTTP API (Hono + OpenAPI 3.1) and SSE event stream over the core services               |
 | `packages/analysis` | Audio analysis maths shared with the analysis window: CLAP input features, Camelot keys |
+| `packages/overlay`  | OBS overlay renderer: draws an overlay document, in OBS and the editor alike            |
 | `apps/desktop`      | Electron app: main process, `track://` protocol, player renderer, Solid UI              |
 | `scripts`           | Electron-as-Node test runner, licence check, stream canary issue reporter               |
 

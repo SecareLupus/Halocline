@@ -1,14 +1,19 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import solid from 'vite-plugin-solid'
+import { bundleAsString } from '../../scripts/vite-bundle'
 
 // Workspace packages ship TypeScript source, so they're bundled, not externalized.
 // Native modules (better-sqlite3) and youtubei.js, whose fflate dependency declares its
 // own module-scope `require` that clashes with the ESM shim, stay in node_modules.
-const bundleWorkspace = { exclude: ['@halocline/core', '@halocline/api', 'zod'] }
+const bundleWorkspace = {
+  exclude: ['@halocline/core', '@halocline/api', '@halocline/overlay', 'zod'],
+}
 
 export default defineConfig({
   main: {
+    // The API inlines the overlay renderer into its page (PLAN §8).
+    plugins: [bundleAsString()],
     build: { externalizeDeps: bundleWorkspace },
   },
   preload: {

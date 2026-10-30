@@ -26,6 +26,7 @@ import { TokenService } from './services/tokens'
 export * from './errors'
 export * from './events'
 export * from './schemas'
+export * from './overlay'
 export { openDatabase, type Db } from './db'
 export {
   normalizeArtist,

@@ -1,14 +1,14 @@
-import type { Core } from '@halocline/core'
+import { CLASSIC_OVERLAY, type Core, type OverlayDocument } from '@halocline/core'
+import renderer from '@halocline/overlay/page?bundle'
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { requireScope, type ApiEnv } from '../auth'
-import nowPlayingHtml from '../overlay/now-playing.html?raw'
 import { authErrors, problem } from '../problem'
 
-/** PLAN §8: the size the layout is designed for. */
-export const OVERLAY_SIZE = { width: 375, height: 140 }
+/** PLAN §8: the canvas size, which the Browser Source should match. */
+export const OVERLAY_SIZE = { ...CLASSIC_OVERLAY.canvas }
 
 const OverlayInfo = z
   .object({
@@ -28,25 +28,59 @@ const IMAGE_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
 }
 
+// It's inlined into the page, where a `</script` would end it early.
+if (/<\/script/i.test(renderer)) throw new Error('The overlay renderer contains "</script"')
+
 const sha256 = (text: string) => `'sha256-${createHash('sha256').update(text).digest('base64')}'`
-const scriptHashes = [...nowPlayingHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) =>
-  sha256(m[1] ?? ''),
-)
 
 /**
- * The page's inline script is allowed by hash, so nothing else can run. Styles
- * stay open because OBS injects the Browser Source's "Custom CSS" as a <style>
- * element. Cloud artwork comes from Google's image hosts; local art from this API.
+ * The renderer is the page's only script, allowed by hash, so nothing else can
+ * run. Styles stay open because OBS injects the Browser Source's "Custom CSS" as
+ * a <style> element. Cloud artwork comes from Google's image hosts; local art
+ * from this API.
  */
 const OVERLAY_CSP = [
   "default-src 'none'",
-  `script-src ${scriptHashes.join(' ')}`,
+  `script-src ${sha256(renderer)}`,
   "style-src 'unsafe-inline'",
   "img-src 'self' https://*.googleusercontent.com https://*.ytimg.com https://*.ggpht.com",
   "connect-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
 ].join('; ')
+
+/**
+ * The Browser Source page: the renderer, and the document it draws as a JSON data
+ * block, which never runs. `<` is escaped so the JSON can't close its block.
+ */
+function overlayPage(doc: OverlayDocument): string {
+  const json = JSON.stringify(doc).replace(/</g, '\\u003c')
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Halocline now playing</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="application/json" id="hl-document">${json}</script>
+    <script>${renderer}</script>
+  </body>
+</html>`
+}
+
+const nowPlaying = overlayPage(CLASSIC_OVERLAY)
 
 export function overlayUrl(origin: string, secret: string): string {
   return `${origin}/overlay/now-playing?token=${encodeURIComponent(secret)}`
@@ -55,7 +89,7 @@ export function overlayUrl(origin: string, secret: string): string {
 export function registerOverlay(app: OpenAPIHono<ApiEnv>, core: Core) {
   // The page itself holds no data; it reads everything with the token in its URL.
   app.get('/overlay/now-playing', (c) =>
-    c.html(nowPlayingHtml, 200, {
+    c.html(nowPlaying, 200, {
       'Content-Security-Policy': OVERLAY_CSP,
       // The token is in the URL; don't hand it to image hosts.
       'Referrer-Policy': 'no-referrer',

@@ -1,4 +1,4 @@
-import { createCore, type Core } from '@halocline/core'
+import { CLASSIC_OVERLAY, createCore, type Core } from '@halocline/core'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,7 +38,16 @@ describe('overlay', () => {
     expect(csp).toContain(`script-src 'sha256-${hash}'`)
     expect(csp).toContain("default-src 'none'")
     expect(res.headers.get('Referrer-Policy')).toBe('no-referrer')
-    expect(html).toContain('class="hl-overlay')
+    expect(html.match(/<script>/g)).toHaveLength(1)
+    expect(script).toContain('hl-overlay')
+  })
+
+  it('carries the Classic document as data, not script', async () => {
+    const html = await (await get('/overlay/now-playing?token=whatever')).text()
+    const json = html.match(
+      /<script type="application\/json" id="hl-document">(.*?)<\/script>/,
+    )?.[1]
+    expect(JSON.parse(json ?? 'null')).toEqual(CLASSIC_OVERLAY)
   })
 
   it('creates one overlay token, reuses it, and rotates it', async () => {
