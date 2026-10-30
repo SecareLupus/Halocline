@@ -114,14 +114,11 @@ export interface IpcHandlers {
   }
   'tokens.revoke': (args: { id: string }) => void
   'api.url': () => string | null
-  /**
-   * Copies an overlay's URL (the default one's without an id) to the clipboard,
-   * creating the overlay token on first use.
-   */
-  'overlay.copy': (args?: { id?: string }) => OverlayInfo
-  /** Replaces the overlay token; every old URL stops working. Copies the default one's new URL. */
-  'overlay.rotate': () => OverlayInfo
-  /** OBS overlays, the default one first (PLAN §8). */
+  /** Copies an overlay's URL to the clipboard, creating the overlay token on first use. */
+  'overlay.copy': (args: { id: string }) => OverlayInfo
+  /** Replaces the overlay token: every overlay's old URL stops working. */
+  'overlay.rotate': () => void
+  /** OBS overlays, in the order they were made; there may be none (PLAN §8). */
   'overlays.list': () => Overlay[]
   'overlays.get': (args: { id: string }) => Overlay
   /** From Classic unless a document is given. */
@@ -131,7 +128,6 @@ export interface IpcHandlers {
    * with `revision_mismatch` if it has changed since.
    */
   'overlays.update': (args: { id: string; changes: OverlayUpdate; revision?: number }) => Overlay
-  /** The default overlay can't be deleted. */
   'overlays.delete': (args: { id: string }) => void
   /** Saves an overlay to a file the user picks; false if they cancel. */
   'overlays.export': (args: { id: string }) => boolean

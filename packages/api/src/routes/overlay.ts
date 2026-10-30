@@ -1,5 +1,5 @@
 import {
-  DEFAULT_OVERLAY_ID,
+  DomainError,
   MAX_IMAGE_BYTES,
   NewOverlay,
   Overlay,
@@ -92,7 +92,7 @@ const page = `<!doctype html>
   </body>
 </html>`
 
-export function overlayUrl(origin: string, secret: string, id = DEFAULT_OVERLAY_ID): string {
+export function overlayUrl(origin: string, secret: string, id: string): string {
   return `${origin}/overlay/${encodeURIComponent(id)}?token=${encodeURIComponent(secret)}`
 }
 
@@ -146,7 +146,7 @@ export function registerOverlay(app: OpenAPIHono<ApiEnv>, core: Core) {
     },
   )
 
-  const overlayInfo = (c: Context, secret: string, id = DEFAULT_OVERLAY_ID) => ({
+  const overlayInfo = (c: Context, secret: string, id: string) => ({
     url: overlayUrl(new URL(c.req.url).origin, secret, id),
     ...core.overlays.get(id).document.canvas,
   })
@@ -156,7 +156,7 @@ export function registerOverlay(app: OpenAPIHono<ApiEnv>, core: Core) {
       method: 'get',
       path: '/v1/overlays',
       tags: ['overlay'],
-      summary: 'Every overlay, the default one first',
+      summary: 'Every overlay, in the order they were made; there may be none',
       middleware: [requireScope('admin')],
       responses: {
         200: {
@@ -277,13 +277,12 @@ export function registerOverlay(app: OpenAPIHono<ApiEnv>, core: Core) {
       method: 'delete',
       path: '/v1/overlays/{id}',
       tags: ['overlay'],
-      summary: "Delete an overlay; the default one can't be",
+      summary: 'Delete an overlay',
       middleware: [requireScope('admin')],
       request: { params: OverlayParams },
       responses: {
         204: { description: 'Deleted' },
         ...authErrors,
-        400: errorResponse('The default overlay'),
         404: errorResponse('No such overlay'),
       },
     }),
@@ -315,14 +314,23 @@ export function registerOverlay(app: OpenAPIHono<ApiEnv>, core: Core) {
       method: 'get',
       path: '/v1/overlay',
       tags: ['overlay'],
-      summary: "The default overlay's URL, creating the overlay token on first use",
+      summary: "The oldest overlay's URL, creating the overlay token on first use",
+      description:
+        'From v0.1, when there was one overlay. Use `GET /v1/overlays/{id}/url` for a ' +
+        'particular overlay.',
+      deprecated: true,
       middleware: [requireScope('admin')],
       responses: {
         200: { description: 'Overlay', content: { 'application/json': { schema: OverlayInfo } } },
         ...authErrors,
+        404: errorResponse('There are no overlays'),
       },
     }),
-    (c) => c.json(overlayInfo(c, core.tokens.overlaySecret()), 200),
+    (c) => {
+      const [oldest] = core.overlays.list()
+      if (!oldest) throw new DomainError('not_found', 'There are no overlays')
+      return c.json(overlayInfo(c, core.tokens.overlaySecret(), oldest.id), 200)
+    },
   )
 
   app.openapi(
@@ -331,12 +339,16 @@ export function registerOverlay(app: OpenAPIHono<ApiEnv>, core: Core) {
       path: '/v1/overlay/rotate',
       tags: ['overlay'],
       summary: "Replace the overlay token; every overlay's old URL stops working",
+      description: "Then get each overlay's new URL from `GET /v1/overlays/{id}/url`.",
       middleware: [requireScope('admin')],
       responses: {
-        200: { description: 'Overlay', content: { 'application/json': { schema: OverlayInfo } } },
+        204: { description: 'Replaced' },
         ...authErrors,
       },
     }),
-    (c) => c.json(overlayInfo(c, core.tokens.rotateOverlay()), 200),
+    (c) => {
+      core.tokens.rotateOverlay()
+      return c.body(null, 204)
+    },
   )
 }

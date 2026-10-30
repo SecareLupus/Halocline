@@ -73,15 +73,22 @@ describe('overlay', () => {
     expect((await get(`/v1/player?token=${secret}`)).status).toBe(200)
     expect((await get(`/v1/queue?token=${secret}`)).status).toBe(403)
 
-    const rotated = (await (
-      await app.request('http://127.0.0.1:17380/v1/overlay/rotate', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-    ).json()) as { url: string }
+    const rotate = await send('POST', '/v1/overlay/rotate', token)
+    expect(rotate.status).toBe(204)
+    const rotated = (await (await get('/v1/overlay', token)).json()) as { url: string }
     expect(rotated.url).not.toBe(first.url)
     expect((await get(`/v1/player?token=${secret}`)).status).toBe(401)
     expect(core.tokens.list().filter((t) => t.scopes.includes('overlay'))).toHaveLength(1)
+  })
+
+  it('has no default overlay: Classic can be deleted, and then there are none', async () => {
+    const token = admin()
+    expect((await send('DELETE', '/v1/overlays/now-playing', token)).status).toBe(204)
+    expect(await (await get('/v1/overlays', token)).json()).toEqual([])
+    expect((await get('/overlay/now-playing?token=x')).status).toBe(404)
+    expect((await get('/v1/overlay', token)).status).toBe(404)
+    // Rotating needs no overlay to point at.
+    expect((await send('POST', '/v1/overlay/rotate', token)).status).toBe(204)
   })
 
   it('serves extracted artwork to overlay tokens, and nothing else', async () => {
@@ -109,7 +116,7 @@ describe('overlay', () => {
     expect(overlay).toMatchObject({ name: 'Wide', revision: 1, document: wide })
 
     const list = (await (await get('/v1/overlays', token)).json()) as Overlay[]
-    expect(list.map((o) => o.name)).toEqual(['Now playing', 'Wide'])
+    expect(list.map((o) => o.name)).toEqual(['Classic', 'Wide'])
 
     const renamed = await send('PATCH', `/v1/overlays/${overlay.id}`, token, { name: 'W' }, '"1"')
     expect(renamed.status).toBe(200)
@@ -129,7 +136,6 @@ describe('overlay', () => {
 
     expect((await send('DELETE', `/v1/overlays/${overlay.id}`, token)).status).toBe(204)
     expect((await get(`/v1/overlays/${overlay.id}`, token)).status).toBe(404)
-    expect((await send('DELETE', '/v1/overlays/now-playing', token)).status).toBe(400)
   })
 
   it('lets the overlay token read documents, but change nothing', async () => {
@@ -145,7 +151,7 @@ describe('overlay', () => {
     expect(patch.status).toBe(403)
   })
 
-  it('reports the default overlay at its own canvas size', async () => {
+  it('reports an overlay at its own canvas size', async () => {
     core.overlays.update('now-playing', { document: wide })
     expect(await (await get('/v1/overlay', admin())).json()).toMatchObject({ width: 600 })
   })

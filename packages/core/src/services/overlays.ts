@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Db } from '../db'
+import { getKv, setKv, type Db } from '../db'
 import { DomainError } from '../errors'
 import type { EventBus } from '../events'
 import {
   CLASSIC_OVERLAY,
-  DEFAULT_OVERLAY_ID,
+  CLASSIC_OVERLAY_ID,
   imagesIn,
   NewOverlay,
   OverlayDocument,
@@ -36,6 +36,9 @@ const toOverlay = (r: OverlayRow): Overlay => ({
   updatedAt: r.updated_at,
 })
 
+/** Set once Classic has been added, so it isn't added again after it's deleted. */
+const SEEDED_KEY = 'overlays_seeded'
+
 /** Uploaded images: big enough for a logo or a frame, small enough to keep in a file. */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -62,19 +65,21 @@ export class OverlayService {
     private readonly events: EventBus,
     private readonly imageDir: string,
   ) {
-    // The default overlay is always there: OBS scenes point at its address.
-    const now = new Date().toISOString()
-    db.prepare(
-      `INSERT OR IGNORE INTO overlays (id, name, document, revision, created_at, updated_at)
-       VALUES (?, ?, ?, 1, ?, ?)`,
-    ).run(DEFAULT_OVERLAY_ID, 'Now playing', JSON.stringify(CLASSIC_OVERLAY), now, now)
+    // Halocline starts with Classic, once. After that it's the user's: deleting
+    // it, or every overlay, sticks. (A database that already has it keeps it.)
+    if (!getKv(db, SEEDED_KEY)) {
+      const now = new Date().toISOString()
+      db.prepare(
+        `INSERT OR IGNORE INTO overlays (id, name, document, revision, created_at, updated_at)
+         VALUES (?, ?, ?, 1, ?, ?)`,
+      ).run(CLASSIC_OVERLAY_ID, 'Classic', JSON.stringify(CLASSIC_OVERLAY), now, now)
+      setKv(db, SEEDED_KEY, '1')
+    }
   }
 
-  /** The default overlay first, then the rest in the order they were made. */
+  /** Every overlay, in the order they were made; there may be none. */
   list(): Overlay[] {
-    const rows = this.db
-      .prepare('SELECT * FROM overlays ORDER BY id != ?, rowid')
-      .all(DEFAULT_OVERLAY_ID) as OverlayRow[]
+    const rows = this.db.prepare('SELECT * FROM overlays ORDER BY rowid').all() as OverlayRow[]
     return rows.map(toOverlay)
   }
 
@@ -126,15 +131,15 @@ export class OverlayService {
   }
 
   delete(id: string): void {
-    if (id === DEFAULT_OVERLAY_ID) {
-      throw new DomainError('invalid_request', "The default overlay can't be deleted")
-    }
     const { changes } = this.db.prepare('DELETE FROM overlays WHERE id = ?').run(id)
     if (!changes) throw new DomainError('not_found', `No overlay with id ${id}`)
     this.events.publish({ type: 'overlay.deleted', data: { id } })
   }
 
-  /** Stores an image (PNG, JPEG, WebP or GIF) and returns its name; the same image, the same name. */
+  /**
+   * Stores an image (PNG, JPEG, WebP or GIF) and returns its name: the same
+   * image, the same name.
+   */
   async addImage(data: Uint8Array): Promise<string> {
     if (data.length > MAX_IMAGE_BYTES) {
       throw new DomainError('invalid_request', 'Images can be up to 10 MB')

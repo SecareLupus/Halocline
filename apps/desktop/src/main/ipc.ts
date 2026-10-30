@@ -1,6 +1,5 @@
 import {
   BulkRecordingPatch,
-  DEFAULT_OVERLAY_ID,
   DomainError,
   Id,
   MAX_IMAGE_BYTES,
@@ -37,11 +36,11 @@ type Handler<C extends IpcChannel> = (
 
 /** Wires UI requests to the same core services the HTTP API uses. */
 export function registerIpc(core: Core, apiUrl: () => string | null): void {
-  const copyOverlay = (secret: () => string, id?: string): OverlayInfo => {
-    const overlay = core.overlays.get(id ?? DEFAULT_OVERLAY_ID)
+  const copyOverlay = (id: string): OverlayInfo => {
+    const overlay = core.overlays.get(id)
     const base = apiUrl()
     if (!base) throw new DomainError('provider_unavailable', 'The API server is not running')
-    const url = overlayUrl(base, secret(), overlay.id)
+    const url = overlayUrl(base, core.tokens.overlaySecret(), overlay.id)
     clipboard.writeText(url)
     return { url, ...overlay.document.canvas }
   }
@@ -195,12 +194,8 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
     },
     'tokens.revoke': (a) => core.tokens.revoke(z.object({ id: Id }).parse(a).id),
     'api.url': () => apiUrl(),
-    'overlay.copy': (a) =>
-      copyOverlay(
-        () => core.tokens.overlaySecret(),
-        z.object({ id: OverlayId.optional() }).optional().parse(a)?.id,
-      ),
-    'overlay.rotate': () => copyOverlay(() => core.tokens.rotateOverlay()),
+    'overlay.copy': (a) => copyOverlay(z.object({ id: OverlayId }).parse(a).id),
+    'overlay.rotate': () => void core.tokens.rotateOverlay(),
     'overlays.list': () => core.overlays.list(),
     'overlays.get': (a) => core.overlays.get(z.object({ id: OverlayId }).parse(a).id),
     'overlays.create': (a) => core.overlays.create(NewOverlay.parse(a)),

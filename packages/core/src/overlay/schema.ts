@@ -188,11 +188,18 @@ export function imagesIn(doc: OverlayDocument): string[] {
   return [...new Set(names)]
 }
 
-/** Generated ids are UUIDs; the default overlay's is `now-playing`. Used in the overlay's URL. */
+/**
+ * Used in the overlay's URL. Generated ids are UUIDs; the Classic Halocline
+ * starts with is `now-playing`.
+ */
 export const OverlayId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
 
-/** Served at `/overlay/now-playing`, the address OBS scenes already use. It can't be deleted. */
-export const DEFAULT_OVERLAY_ID = 'now-playing'
+/**
+ * The id of the Classic overlay Halocline starts with: `/overlay/now-playing`,
+ * the address v0.1 served its only overlay at, so OBS sources set up then keep
+ * working. It's an overlay like any other, and can be deleted.
+ */
+export const CLASSIC_OVERLAY_ID = 'now-playing'
 
 export const Overlay = z.object({
   id: OverlayId,

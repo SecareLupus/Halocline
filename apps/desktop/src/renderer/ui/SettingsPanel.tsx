@@ -1,5 +1,4 @@
 import type { ApiToken, Scope } from '@halocline/core'
-import { DEFAULT_OVERLAY_ID } from '@halocline/core/overlay'
 import { createResource, createSignal, For, onCleanup, Show } from 'solid-js'
 import type { OverlayInfo } from '../../shared/ipc'
 import { call } from './bridge'
@@ -415,14 +414,16 @@ function ObsOverlay(props: { state: AppState }) {
         is on. Make and edit overlays under <strong>Overlays</strong>.
       </p>
       <ul class="list">
-        <For each={overlays()}>
+        <For
+          each={overlays()}
+          fallback={<li class="empty">No overlays yet: make one under Overlays.</li>}
+        >
           {(o) => (
             <li>
               <span class="track">
                 <span class="title">{o.name}</span>
                 <span class="artist">
                   {o.document.canvas.width}×{o.document.canvas.height}
-                  {o.id === DEFAULT_OVERLAY_ID ? ' · default' : ''}
                 </span>
               </span>
               <button type="button" onClick={() => void copy(o.id, o.name)}>
@@ -438,7 +439,7 @@ function ObsOverlay(props: { state: AppState }) {
           <p class="empty">
             {value === 'rotated'
               ? 'Every overlay has a new URL, and the old ones no longer work: copy each one ' +
-                "again for its OBS source. The default overlay's is on the clipboard."
+                'again for its OBS source.'
               : `Copied ${value.name}'s URL. Set its source to ${value.info.width}×${value.info.height}.`}
           </p>
         )}

@@ -55,7 +55,7 @@ All of these are on the Planned TODO list (§11).
         │ state
 ┌───────┴─────────────┐      ┌───────────────────────────────────┐
 │ UI renderer (Solid) │      │ OBS Browser Source                │
-│ search · queue ·    │      │ /overlay/now-playing  ◄── HTTP+SSE│
+│ search · queue ·    │      │ /overlay/<id>         ◄── HTTP+SSE│
 │ library · health ·  │      └───────────────────────────────────┘
 │ settings            │
 └─────────────────────┘
@@ -538,8 +538,10 @@ fit a GPLv3 app. Instead, with nothing native or Python:
 An overlay is a **document**: a JSON description of a fixed-size canvas and the elements on it.
 One renderer draws a document, both in OBS and (later) in the editor's preview, so the editor
 can't drift from what OBS shows. Each overlay is served at `/overlay/<id>?token=<overlay token>`
-and added to OBS as a **Browser Source** with a transparent background. The default overlay,
-`now-playing`, starts as **Classic**; it's always there, since OBS scenes point at its address.
+and added to OBS as a **Browser Source** with a transparent background. There's no default
+overlay: Halocline starts with one **Classic** overlay, and from then on they're the user's.
+Delete Classic, or every overlay, and that sticks. Classic's id is `now-playing`, the address
+v0.1 served its only overlay at, so OBS sources set up then keep working until it's deleted.
 
 ### Document
 
@@ -657,19 +659,21 @@ and friends) are gone: the editor replaces them.
 
 ### Settings → OBS overlays
 
-Every overlay, the default first, each with its canvas size and a **Copy URL** button. The first
+Every overlay, oldest first, each with its canvas size and a **Copy URL** button. The first
 copy creates the `overlay` token; the message names the overlay copied and the size to set on
 its Browser Source. The list follows `overlay.changed` and `overlay.deleted`, so overlays made or
 renamed in the Overlays view (or over the API) show at once. **New URLs…** rotates the token:
-every overlay's URL changes, and the message says so. It points to the Overlays view for editing.
+every overlay's URL changes, and the message says so. With no overlays it says to make one under
+Overlays, and points there for editing.
 
 ### Overlays view (the editor)
 
 A full-window view, opened from the top bar.
-- **List:** every overlay, the default first. **New overlay** starts from a template (Classic,
+- **List:** every overlay, oldest first. **New overlay** starts from a template (Classic,
   Pill, Card, Lower third; `OVERLAY_TEMPLATES` in core) with an optional name.
-- **Toolbar:** rename, **Copy OBS URL** (with the canvas size to set), and **Delete** (two clicks;
-  not on the default overlay).
+- **Toolbar:** rename, **Copy OBS URL** (with the canvas size to set), and **Delete** (two clicks).
+  Deleting opens the next overlay, or, after the last, an empty view that says to make or import
+  one.
 - **Preview:** the overlay drawn by the shared renderer on a checkerboard, so transparency shows,
   up to twice its size. A switcher picks the song: sample states (playing, paused, long names, no
   art) or **Live**, what's playing in Halocline now. Live with nothing playing is a blank canvas,
@@ -730,7 +734,8 @@ A full-window view, opened from the top bar.
   it takes its overlay's id from its address. An unknown id is a 404.
 - Storage: an `overlays` table (id, name, document as JSON, `revision`), not part of `Settings`,
   because a document is replaced whole and settings patches merge field by field.
-  `OverlayService` adds the default overlay if it's missing and refuses to delete it. Every change
+  `OverlayService` adds Classic once, on a database that's never had it (a `kv` flag,
+  `overlays_seeded`, remembers), so a deleted Classic stays deleted. Every change
   bumps the revision and publishes `overlay.changed` (the whole overlay), or `overlay.deleted`.
 - API (admin unless noted): `GET`/`POST /v1/overlays`; `GET /v1/overlays/{id}` (also `read` and
   `overlay`); `PATCH /v1/overlays/{id}` (rename, or replace the document; `If-Match` with the
@@ -741,9 +746,9 @@ A full-window view, opened from the top bar.
   art loads directly from Google's image hosts.
 - The overlay token's secret is kept (in `kv`), unlike other tokens, so the URL can be copied
   again. One token serves every overlay. It can only read what's playing and overlay documents.
-- `GET /v1/overlay` and `POST /v1/overlay/rotate` (admin) are the API side of the Settings button
-  and its "New URL…" (rotate) button, for the default overlay. Rotating changes every overlay's
-  URL.
+- `POST /v1/overlay/rotate` (admin, 204) replaces the overlay token, so every overlay's URL
+  changes: the API side of **New URLs…**. `GET /v1/overlay` (admin) is from v0.1, when there was
+  one overlay: it's deprecated, and returns the oldest overlay's URL, or 404 with none.
 - The UI copies the URL and never displays it, in case Settings is on stream.
 - Clocks: the bar extrapolates from `positionAt`. That's safe because the API binds to loopback,
   so OBS runs on the same machine.

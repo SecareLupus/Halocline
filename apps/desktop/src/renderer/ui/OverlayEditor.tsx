@@ -1,9 +1,4 @@
-import {
-  DEFAULT_OVERLAY_ID,
-  OVERLAY_TEMPLATES,
-  OverlayDocument,
-  type Overlay,
-} from '@halocline/core/overlay'
+import { OVERLAY_TEMPLATES, OverlayDocument, type Overlay } from '@halocline/core/overlay'
 import { DocumentHistory, removeElements, translateElements } from '@halocline/overlay'
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import type { OverlayInfo } from '../../shared/ipc'
@@ -25,7 +20,8 @@ type SaveStatus = 'saved' | 'saving' | 'invalid' | 'conflict'
  */
 export function OverlayEditor(props: { state: AppState }) {
   const [overlays, setOverlays] = createSignal<Overlay[]>([])
-  const [selectedId, setSelectedId] = createSignal(DEFAULT_OVERLAY_ID)
+  /** The overlay being edited; null when there are none. */
+  const [selectedId, setSelectedId] = createSignal<string | null>(null)
   const [draft, setDraft] = createSignal<OverlayDocument | null>(null)
   const [selection, setSelection] = createSignal<string[]>([])
   /** The selected elements that exist: an undo can take one away. */
@@ -73,14 +69,20 @@ export function OverlayEditor(props: { state: AppState }) {
     setIssue(null)
   }
 
-  const select = (id: string) => {
+  const select = (id: string | null) => {
     void save()
     setSelectedId(id)
     setSelection([])
     setCopied(null)
     setConfirmDelete(false)
     const overlay = current()
-    if (overlay) load(overlay)
+    if (overlay) return load(overlay)
+    dirty = false
+    history.clear()
+    historyChanged()
+    setDraft(null)
+    setStatus('saved')
+    setIssue(null)
   }
 
   /** Where a validation issue is, named by element id rather than index. */
@@ -122,6 +124,7 @@ export function OverlayEditor(props: { state: AppState }) {
     clearTimeout(timer)
     const id = selectedId()
     const doc = draft()
+    if (id === null) return saving
     const withDocument = dirty && doc !== null && status() === 'saving'
     if (!withDocument && name === undefined) return saving
     const changes = { ...(name !== undefined && { name }), ...(withDocument && { document: doc }) }
@@ -197,8 +200,10 @@ export function OverlayEditor(props: { state: AppState }) {
   const exportOverlay = () =>
     // eslint-disable-next-line solid/reactivity -- only called from event handlers
     props.state.run(async () => {
+      const id = selectedId()
+      if (!id) return
       await save()
-      await call('overlays.export', { id: selectedId() })
+      await call('overlays.export', { id })
     })
   const importOverlay = () =>
     // eslint-disable-next-line solid/reactivity -- only called from event handlers
@@ -212,15 +217,15 @@ export function OverlayEditor(props: { state: AppState }) {
   const reload = () =>
     // eslint-disable-next-line solid/reactivity -- only called from event handlers
     props.state.run(async () => {
-      load(await call('overlays.get', { id: selectedId() }))
+      const id = selectedId()
+      if (id) load(await call('overlays.get', { id }))
     })
 
   onMount(() => {
-    // eslint-disable-next-line solid/reactivity -- runs once, on mount
     void props.state.run(async () => {
       const list = await call('overlays.list')
       setOverlays(list)
-      const first = list.find((o) => o.id === selectedId()) ?? list[0]
+      const [first] = list
       if (first) {
         setSelectedId(first.id)
         load(first)
@@ -241,7 +246,8 @@ export function OverlayEditor(props: { state: AppState }) {
       }
     } else if (event.type === 'overlay.deleted') {
       setOverlays((list) => list.filter((o) => o.id !== event.data.id))
-      if (event.data.id === selectedId()) select(DEFAULT_OVERLAY_ID)
+      // The next one along, or none once the last is gone.
+      if (event.data.id === selectedId()) select(overlays()[0]?.id ?? null)
     }
   })
   onCleanup(() => {
@@ -268,8 +274,10 @@ export function OverlayEditor(props: { state: AppState }) {
   const copy = () =>
     // eslint-disable-next-line solid/reactivity -- only called from event handlers
     props.state.run(async () => {
+      const id = selectedId()
+      if (!id) return
       await save()
-      setCopied(await call('overlay.copy', { id: selectedId() }))
+      setCopied(await call('overlay.copy', { id }))
     })
 
   // Deleting asks for a second click instead of a dialog, as clearing history does.
@@ -284,6 +292,7 @@ export function OverlayEditor(props: { state: AppState }) {
     clearTimeout(confirmTimer)
     setConfirmDelete(false)
     const id = selectedId()
+    if (!id) return
     clearTimeout(timer)
     dirty = false
     void props.state.run(() => call('overlays.delete', { id }))
@@ -315,7 +324,6 @@ export function OverlayEditor(props: { state: AppState }) {
                     <span class="title">{o.name}</span>
                     <span class="artist">
                       {o.document.canvas.width}×{o.document.canvas.height}
-                      {o.id === DEFAULT_OVERLAY_ID ? ' · default' : ''}
                     </span>
                   </button>
                 </li>
@@ -353,7 +361,16 @@ export function OverlayEditor(props: { state: AppState }) {
           </button>
         </aside>
 
-        <Show when={draft()}>
+        <Show
+          when={draft()}
+          fallback={
+            <Show when={!overlays().length}>
+              <p class="empty">
+                No overlays. Make one from a template, or import one, and it'll show here.
+              </p>
+            </Show>
+          }
+        >
           {(doc) => (
             <div class="overlay-main">
               <div class="overlay-toolbar">
@@ -383,11 +400,9 @@ export function OverlayEditor(props: { state: AppState }) {
                 <button type="button" title="Save to a file" onClick={() => void exportOverlay()}>
                   Export…
                 </button>
-                <Show when={selectedId() !== DEFAULT_OVERLAY_ID}>
-                  <button type="button" onClick={remove}>
-                    {confirmDelete() ? 'Click again to delete' : 'Delete'}
-                  </button>
-                </Show>
+                <button type="button" onClick={remove}>
+                  {confirmDelete() ? 'Click again to delete' : 'Delete'}
+                </button>
               </div>
               <Show when={copied()}>
                 {(info) => (
