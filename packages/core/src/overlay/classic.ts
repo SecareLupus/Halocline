@@ -25,6 +25,8 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
       opacity: 1,
       fill: 'rgb(0 0 0 / 0.7)',
       radius: 0,
+      borderWidth: 0,
+      borderColor: '#ffffff',
     },
     {
       type: 'art',
@@ -36,6 +38,8 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
       opacity: 1,
       placeholder: 'rgb(255 255 255 / 0.15)',
       radius: 0,
+      borderWidth: 0,
+      borderColor: '#ffffff',
       pausedShade: 'rgb(0 0 0 / 0.55)',
       pauseSign: '#ffffff',
     },
@@ -85,6 +89,7 @@ export const CLASSIC_OVERLAY: OverlayDocument = {
       pausedFill: '#9aa3ad',
       track: 'rgb(0 0 0 / 0.5)',
       edge: 'rgb(255 255 255 / 0.25)',
+      radius: 0,
     },
   ],
 }

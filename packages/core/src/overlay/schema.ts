@@ -13,6 +13,19 @@ const Css = z.string().min(1).max(200)
 
 export const SYSTEM_FONT = "system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
 
+/**
+ * Corner radius in canvas pixels. CSS shrinks a radius too big for its box to
+ * fit, so ROUND_RADIUS makes a circle (a square box) or a pill, whatever the size.
+ */
+export const ROUND_RADIUS = 9999
+const Radius = z.number().min(0).max(ROUND_RADIUS)
+
+/** A border inside the element's box; 0 wide for none. */
+const border = {
+  borderWidth: z.number().min(0).max(100).default(0),
+  borderColor: Css.default('#ffffff'),
+}
+
 /** Position and size in canvas pixels. */
 const box = {
   id: OverlayElementId,
@@ -27,7 +40,8 @@ export const RectElement = z.object({
   type: z.literal('rect'),
   ...box,
   fill: Css.default('rgb(0 0 0 / 0.7)'),
-  radius: z.number().min(0).default(0),
+  radius: Radius.default(0),
+  ...border,
 })
 
 export const ArtElement = z.object({
@@ -35,7 +49,9 @@ export const ArtElement = z.object({
   ...box,
   /** Shown while the song has no art. */
   placeholder: Css.default('rgb(255 255 255 / 0.15)'),
-  radius: z.number().min(0).default(0),
+  /** Clips the art, its shade and the pause sign: ROUND_RADIUS for a circle mask. */
+  radius: Radius.default(0),
+  ...border,
   /** Laid over the art while paused. */
   pausedShade: Css.default('rgb(0 0 0 / 0.55)'),
   /** The pause sign's colour; null shows none. */
@@ -67,6 +83,8 @@ export const ProgressElement = z.object({
   track: Css.default('rgb(0 0 0 / 0.5)'),
   /** A 1px inner edge, so the track reads on light scenes; null for none. */
   edge: Css.nullable().default('rgb(255 255 255 / 0.25)'),
+  /** Rounds the track, and clips the played part to it. */
+  radius: Radius.default(0),
 })
 
 export const OverlayElement = z.discriminatedUnion('type', [

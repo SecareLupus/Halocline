@@ -23,6 +23,21 @@ describe('OverlayDocument', () => {
     expect(doc.elements[0]).toMatchObject({ text: '{title}', opacity: 1, minScale: 0.75 })
   })
 
+  it('loads documents saved before radius and borders existed, unchanged', () => {
+    const old = {
+      version: 1,
+      canvas: { width: 100, height: 100 },
+      elements: [
+        { type: 'art', id: 'art', x: 0, y: 0, width: 100, height: 100, radius: 50 },
+        { type: 'progress', id: 'bar', x: 0, y: 90, width: 100, height: 10 },
+      ],
+    }
+    expect(OverlayDocument.parse(old).elements).toMatchObject([
+      { radius: 50, borderWidth: 0, borderColor: '#ffffff' },
+      { radius: 0 },
+    ])
+  })
+
   it('rejects duplicate ids and ids that would not make a class name', () => {
     const doc = (ids: string[]) => ({
       version: 1,

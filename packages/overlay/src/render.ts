@@ -221,12 +221,20 @@ function elementStyle(element: OverlayElement): Record<string, string> {
   }
   switch (element.type) {
     case 'rect':
-      return { ...box, '--hl-fill': element.fill, '--hl-radius': px(element.radius) }
+      return {
+        ...box,
+        '--hl-fill': element.fill,
+        '--hl-radius': px(element.radius),
+        '--hl-border-width': px(element.borderWidth),
+        '--hl-border-color': element.borderColor,
+      }
     case 'art':
       return {
         ...box,
         '--hl-placeholder': element.placeholder,
         '--hl-radius': px(element.radius),
+        '--hl-border-width': px(element.borderWidth),
+        '--hl-border-color': element.borderColor,
         '--hl-shade': element.pausedShade,
         '--hl-sign': element.pauseSign ?? 'transparent',
         '--hl-sign-opacity': element.pauseSign === null ? '0' : '1',
@@ -248,6 +256,7 @@ function elementStyle(element: OverlayElement): Record<string, string> {
         '--hl-paused-fill': element.pausedFill,
         '--hl-track': element.track,
         '--hl-edge': element.edge ?? 'transparent',
+        '--hl-radius': px(element.radius),
       }
   }
 }

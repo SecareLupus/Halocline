@@ -984,3 +984,10 @@ button.element-name span {
   color: var(--muted);
   margin: 0 0 6px;
 }
+
+.prop-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}

@@ -1,5 +1,5 @@
 import { CLASSIC_OVERLAY } from './classic'
-import { SYSTEM_FONT, type OverlayDocument } from './schema'
+import { ROUND_RADIUS, SYSTEM_FONT, type OverlayDocument } from './schema'
 
 /** A starting point for a new overlay (PLAN §8); the editor copies its document. */
 export interface OverlayTemplate {
@@ -27,9 +27,12 @@ const progress = {
   pausedFill: '#9aa3ad',
   track: 'rgb(255 255 255 / 0.2)',
   edge: null,
+  radius: ROUND_RADIUS,
 } as const
+const noBorder = { borderWidth: 0, borderColor: '#ffffff' } as const
 const art = {
   type: 'art',
+  ...noBorder,
   opacity: 1,
   placeholder: 'rgb(255 255 255 / 0.15)',
   pausedShade: 'rgb(0 0 0 / 0.55)',
@@ -51,9 +54,10 @@ const PILL: OverlayDocument = {
       height: 56,
       opacity: 1,
       fill: 'rgb(0 0 0 / 0.75)',
-      radius: 28,
+      radius: ROUND_RADIUS,
+      ...noBorder,
     },
-    { ...art, id: 'art', x: 8, y: 8, width: 40, height: 40, radius: 20 },
+    { ...art, id: 'art', x: 8, y: 8, width: 40, height: 40, radius: ROUND_RADIUS },
     {
       ...text,
       id: 'title',
@@ -95,6 +99,7 @@ const CARD: OverlayDocument = {
       opacity: 1,
       fill: 'rgb(0 0 0 / 0.75)',
       radius: 12,
+      ...noBorder,
     },
     { ...art, id: 'art', x: 12, y: 12, width: 216, height: 216, radius: 8 },
     {

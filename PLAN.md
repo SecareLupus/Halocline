@@ -555,10 +555,11 @@ OverlayDocument {
 }
 
 every element: id, x, y, width, height, opacity
-  rect      fill, radius
-  art       placeholder, radius, pausedShade, pauseSign (colour, or null for none)
+  rect      fill, radius, borderWidth, borderColor
+  art       placeholder, radius, borderWidth, borderColor,
+            pausedShade, pauseSign (colour, or null for none)
   text      text (template), font, size, weight, color, align, shadow, minScale
-  progress  fill, pausedFill, track, edge
+  progress  fill, pausedFill, track, edge, radius
 ```
 
 - **Geometry** is in canvas pixels. The page scales the whole canvas to fit the source, keeping
@@ -566,6 +567,13 @@ every element: id, x, y, width, height, opacity
   A source of another shape gets the canvas scaled, not reflowed.
 - **Ids** are short slugs (`[a-z][a-z0-9-]*`), unique in the document. Each element gets the class
   `hl-<id>`, so OBS Custom CSS can target it.
+- **Corners and masks:** `radius` is in canvas pixels. On art it clips everything inside: the
+  cover, the placeholder, the paused shade and the pause sign. On a progress bar it clips the
+  played part too. `ROUND_RADIUS` (9999) is "fully round": CSS shrinks a radius too big for its
+  box to fit, so it's a circle on a square and a pill on anything longer, whatever the size.
+  That's the circle mask for album art. Other shapes and image masks wait for images (stage E).
+- **Borders** sit inside the box (art shrinks to make room), so a ring around round art doesn't
+  change the element's size.
 - **Colours, fonts and shadows** are CSS values. The renderer sets them through the CSSOM, never
   by writing CSS text, so a document can't inject rules.
 - **Text templates:** `{title}`, `{artists}` (joined with ", ") and `{album}`. Anything else is
@@ -642,7 +650,8 @@ A full-window view, opened from the top bar.
   art) or what's playing now. Clicking an element selects it, and the selection is outlined.
 - **Properties:** the canvas size, fade and hide-when-paused; the element list (front first, with
   forward, backward and remove, and an Add menu); and the selected element's position, size,
-  opacity and its own fields. Colours have a picker and an alpha slider beside the CSS value, so
+  opacity and its own fields. Corners have a **Round** box that sets `ROUND_RADIUS`; panels and
+  art have a border width, with its colour once it's above 0. Colours have a picker and an alpha slider beside the CSS value, so
   anything a picker can't show (a gradient, say) can still be typed. Fonts suggest installed
   families when Chromium can list them.
 - **Saving:** edits save 400 ms after the last one, so open OBS sources redraw while you work.

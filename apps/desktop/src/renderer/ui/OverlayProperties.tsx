@@ -1,5 +1,6 @@
 import {
   OverlayElementId,
+  ROUND_RADIUS,
   SYSTEM_FONT,
   type OverlayDocument,
   type OverlayElement,
@@ -253,11 +254,11 @@ function ElementProps(props: {
               value={e().fill}
               onChange={(fill) => props.onChange({ fill })}
             />
-            <NumberProp
-              label="Corner radius"
-              value={e().radius}
-              min={0}
-              onChange={(radius) => props.onChange({ radius })}
+            <RadiusProp value={e().radius} onChange={(radius) => props.onChange({ radius })} />
+            <BorderProps
+              width={e().borderWidth}
+              color={e().borderColor}
+              onChange={props.onChange}
             />
           </>
         )}
@@ -265,11 +266,11 @@ function ElementProps(props: {
       <Match when={props.element.type === 'art' && props.element}>
         {(e) => (
           <>
-            <NumberProp
-              label="Corner radius"
-              value={e().radius}
-              min={0}
-              onChange={(radius) => props.onChange({ radius })}
+            <RadiusProp value={e().radius} onChange={(radius) => props.onChange({ radius })} />
+            <BorderProps
+              width={e().borderWidth}
+              color={e().borderColor}
+              onChange={props.onChange}
             />
             <ColorProp
               label="No art"
@@ -391,6 +392,7 @@ function ElementProps(props: {
               nullable
               onChange={(edge) => props.onChange({ edge })}
             />
+            <RadiusProp value={e().radius} onChange={(radius) => props.onChange({ radius })} />
           </>
         )}
       </Match>
@@ -404,6 +406,67 @@ function Prop(props: { label: string; title?: string; children: JSX.Element }) {
       <span>{props.label}</span>
       {props.children}
     </label>
+  )
+}
+
+/**
+ * Corner radius, or Round: ROUND_RADIUS, which CSS shrinks to fit, so it's a
+ * circle on a square box and a pill on a longer one whatever the size.
+ */
+function RadiusProp(props: { value: number; onChange: (radius: number) => void }) {
+  const round = () => props.value >= ROUND_RADIUS
+  return (
+    <div class="prop">
+      <span>Corners</span>
+      <span class="prop-inline">
+        <input
+          type="number"
+          aria-label="Corner radius"
+          min="0"
+          step="1"
+          value={round() ? '' : props.value}
+          disabled={round()}
+          onInput={(e) => {
+            const n = e.currentTarget.valueAsNumber
+            if (Number.isFinite(n) && n >= 0) props.onChange(Math.min(n, ROUND_RADIUS))
+          }}
+        />
+        <label class="prop-check" title="A circle on a square, a pill on anything longer">
+          <input
+            type="checkbox"
+            checked={round()}
+            onChange={(e) => props.onChange(e.currentTarget.checked ? ROUND_RADIUS : 0)}
+          />
+          Round
+        </label>
+      </span>
+    </div>
+  )
+}
+
+/** A border inside the box; its colour only matters once it has a width. */
+function BorderProps(props: {
+  width: number
+  color: string
+  onChange: (changes: { borderWidth?: number; borderColor?: string }) => void
+}) {
+  return (
+    <>
+      <NumberProp
+        label="Border"
+        value={props.width}
+        min={0}
+        step={0.5}
+        onChange={(borderWidth) => props.onChange({ borderWidth })}
+      />
+      <Show when={props.width > 0}>
+        <ColorProp
+          label="Border colour"
+          value={props.color}
+          onChange={(borderColor) => props.onChange({ borderColor })}
+        />
+      </Show>
+    </>
   )
 }
 

@@ -40,10 +40,13 @@ export const BASE_CSS = `
 :where(.hl-overlay) [data-type='rect'] {
   background: var(--hl-fill);
   border-radius: var(--hl-radius);
+  border: var(--hl-border-width) solid var(--hl-border-color);
 }
 
+/* The border sits inside the box, and the radius clips the art within it. */
 :where(.hl-overlay) [data-type='art'] {
   border-radius: var(--hl-radius);
+  border: var(--hl-border-width) solid var(--hl-border-color);
   overflow: hidden;
 }
 :where(.hl-overlay) [data-type='art'] .hl-slot {
@@ -97,6 +100,8 @@ export const BASE_CSS = `
 :where(.hl-overlay) [data-type='progress'] {
   background: var(--hl-track);
   box-shadow: inset 0 0 0 1px var(--hl-edge);
+  border-radius: var(--hl-radius);
+  overflow: hidden;
 }
 :where(.hl-overlay) .hl-fill {
   height: 100%;
