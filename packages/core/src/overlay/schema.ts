@@ -111,3 +111,36 @@ export const OverlayDocument = z
     })
   })
 export type OverlayDocument = z.infer<typeof OverlayDocument>
+
+/** Generated ids are UUIDs; the default overlay's is `now-playing`. Used in the overlay's URL. */
+export const OverlayId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+
+/** Served at `/overlay/now-playing`, the address OBS scenes already use. It can't be deleted. */
+export const DEFAULT_OVERLAY_ID = 'now-playing'
+
+export const Overlay = z.object({
+  id: OverlayId,
+  name: z.string().min(1).max(100),
+  /** Bumped by every change; send it back as `If-Match` to avoid overwriting another edit. */
+  revision: z.number().int().positive(),
+  document: OverlayDocument,
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+})
+export type Overlay = z.infer<typeof Overlay>
+
+export const NewOverlay = z
+  .object({
+    name: Overlay.shape.name,
+    /** Classic when left out. */
+    document: OverlayDocument.optional(),
+  })
+  .strict()
+export type NewOverlay = z.infer<typeof NewOverlay>
+
+/** The document is replaced whole, never merged. */
+export const OverlayUpdate = z
+  .object({ name: Overlay.shape.name, document: OverlayDocument })
+  .partial()
+  .strict()
+export type OverlayUpdate = z.infer<typeof OverlayUpdate>

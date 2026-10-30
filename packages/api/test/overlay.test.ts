@@ -1,4 +1,4 @@
-import { CLASSIC_OVERLAY, createCore, type Core } from '@halocline/core'
+import { CLASSIC_OVERLAY, createCore, type Core, type Overlay } from '@halocline/core'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,6 +26,17 @@ const get = (path: string, token?: string) =>
   app.request(`http://127.0.0.1:17380${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
+const send = (method: string, path: string, token: string, body?: unknown, ifMatch?: string) =>
+  app.request(`http://127.0.0.1:17380${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(ifMatch && { 'If-Match': ifMatch }),
+    },
+    ...(body !== undefined && { body: JSON.stringify(body) }),
+  })
+const wide = { ...CLASSIC_OVERLAY, canvas: { width: 600, height: 140 } }
 
 describe('overlay', () => {
   it('serves the page with a CSP that allows only its own script', async () => {
@@ -42,12 +53,11 @@ describe('overlay', () => {
     expect(script).toContain('hl-overlay')
   })
 
-  it('carries the Classic document as data, not script', async () => {
-    const html = await (await get('/overlay/now-playing?token=whatever')).text()
-    const json = html.match(
-      /<script type="application\/json" id="hl-document">(.*?)<\/script>/,
-    )?.[1]
-    expect(JSON.parse(json ?? 'null')).toEqual(CLASSIC_OVERLAY)
+  it('serves the page for each overlay, and a 404 for unknown ones', async () => {
+    const extra = core.overlays.create({ name: 'Extra' })
+    expect((await get(`/overlay/${extra.id}?token=x`)).status).toBe(200)
+    expect((await get('/overlay/no-such-overlay?token=x')).status).toBe(404)
+    expect((await get('/overlay/Not%20An%20Id?token=x')).status).toBe(404)
   })
 
   it('creates one overlay token, reuses it, and rotates it', async () => {
@@ -88,5 +98,71 @@ describe('overlay', () => {
     expect((await get(`/v1/artwork/..%2Fsecret.txt?token=${secret}`)).status).toBe(404)
     expect((await get(`/v1/artwork/${'b'.repeat(40)}.png?token=${secret}`)).status).toBe(404)
     expect((await get(`/v1/artwork/${name}`)).status).toBe(401)
+  })
+
+  it('creates, edits and deletes overlays, with revisions as ETags', async () => {
+    const token = admin()
+    const created = await send('POST', '/v1/overlays', token, { name: 'Wide', document: wide })
+    expect(created.status).toBe(201)
+    const overlay = (await created.json()) as Overlay
+    expect(created.headers.get('ETag')).toBe('"1"')
+    expect(overlay).toMatchObject({ name: 'Wide', revision: 1, document: wide })
+
+    const list = (await (await get('/v1/overlays', token)).json()) as Overlay[]
+    expect(list.map((o) => o.name)).toEqual(['Now playing', 'Wide'])
+
+    const renamed = await send('PATCH', `/v1/overlays/${overlay.id}`, token, { name: 'W' }, '"1"')
+    expect(renamed.status).toBe(200)
+    expect(renamed.headers.get('ETag')).toBe('"2"')
+    const stale = await send('PATCH', `/v1/overlays/${overlay.id}`, token, { name: 'X' }, '"1"')
+    expect(stale.status).toBe(412)
+    const bad = await send('PATCH', `/v1/overlays/${overlay.id}`, token, {
+      document: { ...wide, elements: [{ type: 'rect', id: 'Bad Id' }] },
+    })
+    expect(bad.status).toBe(400)
+
+    const info = (await (await get(`/v1/overlays/${overlay.id}/url`, token)).json()) as {
+      url: string
+    }
+    expect(info).toMatchObject({ width: 600, height: 140 })
+    expect(info.url).toContain(`/overlay/${overlay.id}?token=hl_`)
+
+    expect((await send('DELETE', `/v1/overlays/${overlay.id}`, token)).status).toBe(204)
+    expect((await get(`/v1/overlays/${overlay.id}`, token)).status).toBe(404)
+    expect((await send('DELETE', '/v1/overlays/now-playing', token)).status).toBe(400)
+  })
+
+  it('lets the overlay token read documents, but change nothing', async () => {
+    const secret = core.tokens.overlaySecret()
+    const res = await get(`/v1/overlays/now-playing?token=${secret}`)
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as Overlay).document).toEqual(CLASSIC_OVERLAY)
+    expect((await get(`/v1/overlays?token=${secret}`)).status).toBe(403)
+    const patch = await app.request(
+      `http://127.0.0.1:17380/v1/overlays/now-playing?token=${secret}`,
+      { method: 'PATCH', body: JSON.stringify({ name: 'Mine' }) },
+    )
+    expect(patch.status).toBe(403)
+  })
+
+  it('reports the default overlay at its own canvas size', async () => {
+    core.overlays.update('now-playing', { document: wide })
+    expect(await (await get('/v1/overlay', admin())).json()).toMatchObject({ width: 600 })
+  })
+
+  it('streams overlay changes to the overlay token, so OBS redraws', async () => {
+    const secret = core.tokens.overlaySecret()
+    const controller = new AbortController()
+    const res = await app.request(`/v1/events?token=${secret}`, { signal: controller.signal })
+    const reader = res.body!.getReader()
+    // Not for overlay tokens: filtered out.
+    core.events.publish({ type: 'queue.changed', data: { revision: 99 } })
+    core.overlays.update('now-playing', { name: 'Main' })
+    const { value } = await reader.read()
+    const text = new TextDecoder().decode(value)
+    expect(text).toContain('event: overlay.changed')
+    expect(text).not.toContain('queue.changed')
+    controller.abort()
+    await reader.cancel()
   })
 })

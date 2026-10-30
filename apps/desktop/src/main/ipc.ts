@@ -1,8 +1,12 @@
 import {
   BulkRecordingPatch,
+  DEFAULT_OVERLAY_ID,
   DomainError,
   Id,
   MergeRecordings,
+  NewOverlay,
+  OverlayId,
+  OverlayUpdate,
   PlayerPatch,
   QueuePosition,
   RecordingPatch,
@@ -12,7 +16,7 @@ import {
   YtmSong,
   type Core,
 } from '@halocline/core'
-import { OVERLAY_SIZE, overlayUrl } from '@halocline/api'
+import { overlayUrl } from '@halocline/api'
 import { BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
 import { z } from 'zod'
 import {
@@ -30,12 +34,13 @@ type Handler<C extends IpcChannel> = (
 
 /** Wires UI requests to the same core services the HTTP API uses. */
 export function registerIpc(core: Core, apiUrl: () => string | null): void {
-  const copyOverlay = (secret: string): OverlayInfo => {
+  const copyOverlay = (secret: () => string, id?: string): OverlayInfo => {
+    const overlay = core.overlays.get(id ?? DEFAULT_OVERLAY_ID)
     const base = apiUrl()
     if (!base) throw new DomainError('provider_unavailable', 'The API server is not running')
-    const url = overlayUrl(base, secret)
+    const url = overlayUrl(base, secret(), overlay.id)
     clipboard.writeText(url)
-    return { url, ...OVERLAY_SIZE }
+    return { url, ...overlay.document.canvas }
   }
   const handlers: { [C in IpcChannel]: Handler<C> } = {
     'library.search': (a) => core.library.search(z.object({ q: z.string() }).parse(a).q),
@@ -187,8 +192,26 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
     },
     'tokens.revoke': (a) => core.tokens.revoke(z.object({ id: Id }).parse(a).id),
     'api.url': () => apiUrl(),
-    'overlay.copy': () => copyOverlay(core.tokens.overlaySecret()),
-    'overlay.rotate': () => copyOverlay(core.tokens.rotateOverlay()),
+    'overlay.copy': (a) =>
+      copyOverlay(
+        () => core.tokens.overlaySecret(),
+        z.object({ id: OverlayId.optional() }).optional().parse(a)?.id,
+      ),
+    'overlay.rotate': () => copyOverlay(() => core.tokens.rotateOverlay()),
+    'overlays.list': () => core.overlays.list(),
+    'overlays.get': (a) => core.overlays.get(z.object({ id: OverlayId }).parse(a).id),
+    'overlays.create': (a) => core.overlays.create(NewOverlay.parse(a)),
+    'overlays.update': (a) => {
+      const { id, changes, revision } = z
+        .object({
+          id: OverlayId,
+          changes: OverlayUpdate,
+          revision: z.number().int().positive().optional(),
+        })
+        .parse(a)
+      return core.overlays.update(id, changes, revision)
+    },
+    'overlays.delete': (a) => core.overlays.delete(z.object({ id: OverlayId }).parse(a).id),
   }
 
   ipcMain.handle(

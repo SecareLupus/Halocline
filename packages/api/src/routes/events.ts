@@ -3,7 +3,12 @@ import type { OpenAPIHono } from '@hono/zod-openapi'
 import { streamSSE } from 'hono/streaming'
 import { isOverlayOnly, requireScope, type ApiEnv } from '../auth'
 
-const OVERLAY_EVENTS: ReadonlySet<EventType> = new Set(['player.changed', 'track.changed'])
+const OVERLAY_EVENTS: ReadonlySet<EventType> = new Set([
+  'player.changed',
+  'track.changed',
+  'overlay.changed',
+  'overlay.deleted',
+])
 const KEEPALIVE_MS = 15_000
 
 /**

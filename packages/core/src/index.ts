@@ -20,6 +20,7 @@ import { AutoplayService } from './services/autoplay'
 import { PlayerService } from './services/player'
 import { LibraryScanner, type ScannerOptions } from './services/scanner'
 import { QueueService } from './services/queue'
+import { OverlayService } from './services/overlays'
 import { SettingsService } from './services/settings'
 import { TokenService } from './services/tokens'
 
@@ -90,6 +91,7 @@ export {
 } from './services/player'
 export * from './playback'
 export { QueueService, type AddToQueue } from './services/queue'
+export { OverlayService } from './services/overlays'
 export { SettingsService } from './services/settings'
 export { TokenService } from './services/tokens'
 export { CircuitBreaker } from './stream/circuit-breaker'
@@ -103,6 +105,7 @@ export interface Core {
   player: PlayerService
   settings: SettingsService
   tokens: TokenService
+  overlays: OverlayService
   health: HealthService
   scanner: LibraryScanner
   ytm: YtmCatalog
@@ -212,6 +215,7 @@ export function createCore(options: {
     ...options.autoplay,
   })
   const tokens = new TokenService(db)
+  const overlays = new OverlayService(db, events)
   return {
     db,
     events,
@@ -220,6 +224,7 @@ export function createCore(options: {
     player,
     settings,
     tokens,
+    overlays,
     health,
     scanner,
     ytm,

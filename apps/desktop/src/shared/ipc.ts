@@ -7,7 +7,10 @@ import type {
   BulkResult,
   Health,
   HistoryPage,
+  NewOverlay,
   OutputState,
+  Overlay,
+  OverlayUpdate,
   PlayerCommand,
   PlayerPatch,
   PlayerReport,
@@ -34,7 +37,7 @@ import type {
   YtmStatus,
 } from '@halocline/core'
 
-/** The OBS overlay's address and the source size its layout is designed for (PLAN §8). */
+/** An OBS overlay's address, and the size to give its Browser Source: its canvas (PLAN §8). */
 export interface OverlayInfo {
   url: string
   width: number
@@ -111,10 +114,25 @@ export interface IpcHandlers {
   }
   'tokens.revoke': (args: { id: string }) => void
   'api.url': () => string | null
-  /** Copies the OBS overlay URL to the clipboard, creating its token on first use. */
-  'overlay.copy': () => OverlayInfo
-  /** Replaces the overlay token; the old URL stops working. Copies the new URL. */
+  /**
+   * Copies an overlay's URL (the default one's without an id) to the clipboard,
+   * creating the overlay token on first use.
+   */
+  'overlay.copy': (args?: { id?: string }) => OverlayInfo
+  /** Replaces the overlay token; every old URL stops working. Copies the default one's new URL. */
   'overlay.rotate': () => OverlayInfo
+  /** OBS overlays, the default one first (PLAN §8). */
+  'overlays.list': () => Overlay[]
+  'overlays.get': (args: { id: string }) => Overlay
+  /** From Classic unless a document is given. */
+  'overlays.create': (args: NewOverlay) => Overlay
+  /**
+   * Renames an overlay or replaces its document whole. With `revision`, fails
+   * with `revision_mismatch` if it has changed since.
+   */
+  'overlays.update': (args: { id: string; changes: OverlayUpdate; revision?: number }) => Overlay
+  /** The default overlay can't be deleted. */
+  'overlays.delete': (args: { id: string }) => void
 }
 
 export type IpcChannel = keyof IpcHandlers

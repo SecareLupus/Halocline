@@ -1,3 +1,4 @@
+import type { Overlay } from './overlay'
 import type {
   AnalysisStatus,
   Health,
@@ -19,6 +20,8 @@ export type HaloclineEvent =
   | { type: 'output.changed'; data: OutputState }
   | { type: 'ytm.changed'; data: YtmStatus }
   | { type: 'analysis.changed'; data: AnalysisStatus }
+  | { type: 'overlay.changed'; data: Overlay }
+  | { type: 'overlay.deleted'; data: { id: string } }
 
 export type EventType = HaloclineEvent['type']
 export type StampedEvent = HaloclineEvent & { id: number; at: number }

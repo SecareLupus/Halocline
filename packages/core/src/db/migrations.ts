@@ -136,4 +136,16 @@ export const migrations: string[] = [
     SELECT id, last_played_at FROM recordings WHERE last_played_at IS NOT NULL
     ORDER BY last_played_at;
   `,
+  /* sql */ `
+  -- OBS overlays (PLAN §8): each a JSON document, replaced whole on every change.
+  -- The default one (id 'now-playing') is added by OverlayService.
+  CREATE TABLE overlays (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    document   TEXT NOT NULL,
+    revision   INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  `,
 ]

@@ -386,7 +386,8 @@ the app rather than a CDN, so it works offline under a strict CSP. Reading needs
 - Each token has an optional rate limit. A future Twitch chat bridge gets `queue:add` only.
 - **Overlay tokens:** OBS Browser Sources and `EventSource` can't send auth headers.
   - The API accepts a `?token=` query parameter, but **only for `overlay`-scoped tokens**.
-  - An overlay token can read player state, the current track and artwork, and nothing else.
+  - An overlay token can read player state, the current track, artwork and overlay documents,
+    and nothing else.
   - It ends up stored in OBS scene files, so it must be harmless if leaked.
 
 **Network:**
@@ -536,9 +537,9 @@ fit a GPLv3 app. Instead, with nothing native or Python:
 
 An overlay is a **document**: a JSON description of a fixed-size canvas and the elements on it.
 One renderer draws a document, both in OBS and (later) in the editor's preview, so the editor
-can't drift from what OBS shows. Halocline ships one document, **Classic**, and serves it at
-`/overlay/now-playing?token=<overlay token>`. It's added to OBS as a **Browser Source** with a
-transparent background.
+can't drift from what OBS shows. Each overlay is served at `/overlay/<id>?token=<overlay token>`
+and added to OBS as a **Browser Source** with a transparent background. The default overlay,
+`now-playing`, starts as **Classic**; it's always there, since OBS scenes point at its address.
 
 ### Document
 
@@ -597,9 +598,11 @@ every element: id, x, y, width, height, opacity
 ### Behaviour
 
 The same for every document:
-- **Data:** on load the page fetches `GET /v1/player`, then subscribes to `/v1/events` for
-  `player.changed` and `track.changed`. If the connection drops, it reconnects and fetches the
-  state again.
+- **Data:** on load the page fetches its overlay (`GET /v1/overlays/{id}`) and `GET /v1/player`,
+  then subscribes to `/v1/events` for `player.changed`, `track.changed`, `overlay.changed` and
+  `overlay.deleted`. If the connection drops, it reconnects and fetches both again.
+- **Edits:** a changed document redraws at once, keeping the song shown. Only a newer revision
+  counts, so a refetch racing an event can't go back a step. A deleted overlay draws nothing.
 - **Progress:** events carry `positionMs` plus a timestamp, and the page moves the bar forward
   locally between events. It stays smooth with no per-frame events, and resyncs on every event
   (seeks included).
@@ -636,15 +639,24 @@ shows the canvas size to set on the Browser Source.
   plugin (used by electron-vite and Vitest alike) that turns an import ending in `?bundle` into
   the string of its Rolldown bundle.
 - The page's CSP allows only that inline script, by hash. Styles stay open, because OBS injects
-  Custom CSS as a `<style>` element. The document travels in the page as a JSON data block,
-  which isn't executed.
+  Custom CSS as a `<style>` element. The page is the same for every overlay and holds no data:
+  it takes its overlay's id from its address. An unknown id is a 404.
+- Storage: an `overlays` table (id, name, document as JSON, `revision`), not part of `Settings`,
+  because a document is replaced whole and settings patches merge field by field.
+  `OverlayService` adds the default overlay if it's missing and refuses to delete it. Every change
+  bumps the revision and publishes `overlay.changed` (the whole overlay), or `overlay.deleted`.
+- API (admin unless noted): `GET`/`POST /v1/overlays`; `GET /v1/overlays/{id}` (also `read` and
+  `overlay`); `PATCH /v1/overlays/{id}` (rename, or replace the document; `If-Match` with the
+  revision, else 412); `DELETE /v1/overlays/{id}`; `GET /v1/overlays/{id}/url` (address and
+  canvas size). IPC: `overlays.list/get/create/update/delete`, and `overlay.copy` takes an id.
 - `Referrer-Policy: no-referrer` keeps the token out of image requests.
 - Local cover art comes from `GET /v1/artwork/{hash}` (`read` or `overlay` scope). YouTube Music
   art loads directly from Google's image hosts.
 - The overlay token's secret is kept (in `kv`), unlike other tokens, so the URL can be copied
-  again. It can only read what's playing.
+  again. One token serves every overlay. It can only read what's playing and overlay documents.
 - `GET /v1/overlay` and `POST /v1/overlay/rotate` (admin) are the API side of the Settings button
-  and its "New URL…" (rotate) button.
+  and its "New URL…" (rotate) button, for the default overlay. Rotating changes every overlay's
+  URL.
 - The UI copies the URL and never displays it, in case Settings is on stream.
 - Clocks: the bar extrapolates from `positionAt`. That's safe because the API binds to loopback,
   so OBS runs on the same machine.
@@ -655,13 +667,8 @@ Each stage builds on the document model, so none is thrown away.
 
 - **A. Document and renderer** *(done)*: the model above, Classic as a document, the shared
   renderer. No visible change apart from the scaling rule.
-- **B. Storage, API and live updates:**
-  - An `overlays` table (id, name, document, `revision`), not part of `Settings`: a document is
-    replaced whole, and settings patches merge field by field.
-  - `/v1/overlays` CRUD (admin) plus the matching IPC, each validated with `OverlayDocument`.
-  - Each overlay at `/overlay/{id}?token=…`. `/overlay/now-playing` stays as the default
-    overlay's address. The page loads its document from the API rather than having it inlined.
-  - An `overlay.changed` event, so OBS redraws while you edit.
+- **B. Storage, API and live updates** *(done)*: overlays stored and edited through the API and
+  IPC, each at its own address, and OBS redraws as they change (see As built). No UI yet.
 - **C. Property-panel editor:** a Solid page with a few built-in templates (Classic plus two or
   three), a property panel and a live preview through the same renderer. A sample-state switcher
   covers the edge cases: playing, paused, a long title, no art, several artists.
