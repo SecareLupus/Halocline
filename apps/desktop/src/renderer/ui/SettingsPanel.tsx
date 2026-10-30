@@ -1,5 +1,6 @@
 import type { ApiToken, Scope } from '@halocline/core'
-import { createResource, createSignal, For, Show } from 'solid-js'
+import { DEFAULT_OVERLAY_ID } from '@halocline/core/overlay'
+import { createResource, createSignal, For, onCleanup, Show } from 'solid-js'
 import type { OverlayInfo } from '../../shared/ipc'
 import { call } from './bridge'
 import type { AppState } from './store'
@@ -382,46 +383,75 @@ function LibraryFolders(props: { state: AppState }) {
   )
 }
 
-/** Settings → Overlay (PLAN §8). The URL holds a token, so it's copied, never shown. */
+/**
+ * Settings → OBS overlays (PLAN §8): each overlay's URL, to paste into a Browser
+ * Source. URLs hold the overlay token, so they're copied, never shown.
+ */
 function ObsOverlay(props: { state: AppState }) {
-  const [copied, setCopied] = createSignal<OverlayInfo | null>(null)
-  const [rotated, setRotated] = createSignal(false)
-  const copy = (rotate: boolean) =>
+  const [overlays, { refetch }] = createResource(() => call('overlays.list'))
+  // Made, renamed or deleted in the Overlays view, or over the API.
+  const off = window.halocline.onEvent((e) => {
+    if (e.type === 'overlay.changed' || e.type === 'overlay.deleted') void refetch()
+  })
+  onCleanup(off)
+  /** The overlay whose URL was copied last, and its size; or that every URL changed. */
+  const [copied, setCopied] = createSignal<{ name: string; info: OverlayInfo } | 'rotated' | null>(
+    null,
+  )
+  const copy = (id: string, name: string) =>
+    props.state.run(async () => setCopied({ name, info: await call('overlay.copy', { id }) }))
+  const rotate = () =>
     props.state.run(async () => {
-      setCopied(await call(rotate ? 'overlay.rotate' : 'overlay.copy'))
-      setRotated(rotate)
+      await call('overlay.rotate')
+      setCopied('rotated')
     })
 
   return (
     <>
-      <h2>OBS overlay</h2>
+      <h2>OBS overlays</h2>
       <p>
-        Add a <strong>Browser Source</strong> in OBS and paste the overlay URL. It shows the current
-        song on a transparent background, and hides itself when nothing is playing or an ad is on.
-        Change its layout, or make more overlays, under <strong>Overlays</strong>.
+        Add a <strong>Browser Source</strong> in OBS and paste an overlay's URL. It shows the
+        current song on a transparent background, and hides itself when nothing is playing or an ad
+        is on. Make and edit overlays under <strong>Overlays</strong>.
       </p>
-      <div class="button-row">
-        <button type="button" onClick={() => void copy(false)}>
-          Copy overlay URL
-        </button>
-        <button
-          type="button"
-          title="Use if the URL leaked; OBS sources need the new one"
-          onClick={() => void copy(true)}
-        >
-          New URL…
-        </button>
-      </div>
-      <Show when={copied()}>
-        {(info) => (
+      <ul class="list">
+        <For each={overlays()}>
+          {(o) => (
+            <li>
+              <span class="track">
+                <span class="title">{o.name}</span>
+                <span class="artist">
+                  {o.document.canvas.width}×{o.document.canvas.height}
+                  {o.id === DEFAULT_OVERLAY_ID ? ' · default' : ''}
+                </span>
+              </span>
+              <button type="button" onClick={() => void copy(o.id, o.name)}>
+                Copy URL
+              </button>
+            </li>
+          )}
+        </For>
+      </ul>
+      {/* Keyed: it re-renders whenever the value changes, not only when it first appears. */}
+      <Show when={copied()} keyed>
+        {(value) => (
           <p class="empty">
-            {rotated()
-              ? 'New URL copied; the old ones no longer work, for every overlay. '
-              : 'Copied. '}
-            Set the source to {info().width}×{info().height}.
+            {value === 'rotated'
+              ? 'Every overlay has a new URL, and the old ones no longer work: copy each one ' +
+                "again for its OBS source. The default overlay's is on the clipboard."
+              : `Copied ${value.name}'s URL. Set its source to ${value.info.width}×${value.info.height}.`}
           </p>
         )}
       </Show>
+      <div class="button-row">
+        <button
+          type="button"
+          title="If a URL leaked: every overlay gets a new one, and OBS sources need them"
+          onClick={() => void rotate()}
+        >
+          New URLs…
+        </button>
+      </div>
     </>
   )
 }

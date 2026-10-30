@@ -655,11 +655,13 @@ rule like `.hl-title { color: gold }` wins. Classic's ids match the old page's c
 `.hl-artist`, `.hl-title`, `.hl-bar`). The old page's CSS custom properties (`--hl-bar-color`
 and friends) are gone: the editor replaces them.
 
-### Settings → Overlay
+### Settings → OBS overlays
 
-A "Copy overlay URL" button for the default overlay. It creates the `overlay` token on first use,
-copies the URL, and shows the canvas size to set on the Browser Source. It points to the
-Overlays view for editing.
+Every overlay, the default first, each with its canvas size and a **Copy URL** button. The first
+copy creates the `overlay` token; the message names the overlay copied and the size to set on
+its Browser Source. The list follows `overlay.changed` and `overlay.deleted`, so overlays made or
+renamed in the Overlays view (or over the API) show at once. **New URLs…** rotates the token:
+every overlay's URL changes, and the message says so. It points to the Overlays view for editing.
 
 ### Overlays view (the editor)
 
@@ -670,7 +672,11 @@ A full-window view, opened from the top bar.
   not on the default overlay).
 - **Preview:** the overlay drawn by the shared renderer on a checkerboard, so transparency shows,
   up to twice its size. A switcher picks the song: sample states (playing, paused, long names, no
-  art) or what's playing now.
+  art) or **Live**, what's playing in Halocline now. Live with nothing playing is a blank canvas,
+  as OBS would show it, with a note on the canvas saying why.
+- The stage's frame is an outline, not a border: a border takes a pixel from each side, so the
+  inside would no longer have the canvas's shape, and the uniformly scaled drawing would fall
+  short of the selection handles on one axis.
 - **Canvas editing**, in the preview:
   - Click selects; Shift (or Ctrl) click adds or removes; a marquee dragged from empty space
     (there's a margin around the canvas for it) selects whatever it touches.

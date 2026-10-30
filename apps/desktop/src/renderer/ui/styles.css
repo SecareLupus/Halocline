@@ -903,10 +903,29 @@ button.element-name span {
 }
 
 /* A checkerboard behind the overlay, so its transparent parts read as transparent. */
+/*
+ * An outline, not a border: a border would take a pixel from each side, so the
+ * inside would no longer have the canvas's shape and the drawing would fall
+ * short of the handles on one axis.
+ */
 .overlay-stage {
   position: relative;
   background: repeating-conic-gradient(#8a9099 0 25%, #5f656d 0 50%) 0 0 / 16px 16px;
-  border: 1px solid var(--border);
+  outline: 1px solid var(--border);
+}
+
+/* Over a blank canvas, says why it's blank. */
+.overlay-stage-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
+  pointer-events: none;
 }
 
 .overlay-stage > div:first-child {

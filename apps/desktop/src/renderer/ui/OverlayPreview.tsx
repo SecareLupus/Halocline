@@ -210,11 +210,17 @@ export function OverlayPreview(props: {
   return (
     <div class="overlay-preview">
       <div class="segmented" role="radiogroup" aria-label="Preview with">
-        <For each={[...SAMPLES, { name: 'live' as const, label: 'Now playing' }]}>
+        <For
+          each={[
+            ...SAMPLES.map((s) => ({ ...s, title: 'A made-up song' })),
+            { name: 'live' as const, label: 'Live', title: "What's playing in Halocline now" },
+          ]}
+        >
           {(s) => (
             <button
               type="button"
               role="radio"
+              title={s.title}
               aria-checked={sample() === s.name}
               onClick={() => setSample(s.name)}
             >
@@ -279,6 +285,12 @@ export function OverlayPreview(props: {
           <Show when={marquee()}>
             {(box) => <div class="overlay-marquee" style={boxStyle(box())} />}
           </Show>
+          <Show when={nothingPlaying()}>
+            <div class="overlay-stage-note">
+              Nothing is playing, so the overlay is hidden, as it would be in OBS. Pick a sample
+              song to see it.
+            </div>
+          </Show>
         </div>
       </div>
       <p class="prop-hint">
@@ -286,9 +298,6 @@ export function OverlayPreview(props: {
         to select several. Edges snap to the canvas and each other; hold Alt not to. Arrow keys
         nudge (Shift for 10), Delete removes, Ctrl+Z undoes.
       </p>
-      <Show when={nothingPlaying()}>
-        <p class="empty">Nothing is playing, so the overlay is hidden, as it would be in OBS.</p>
-      </Show>
     </div>
   )
 }
