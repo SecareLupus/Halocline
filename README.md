@@ -5,7 +5,7 @@ now) share one queue, a built-in OBS overlay shows what's playing, and everythin
 also available over an HTTP API with a live event stream, so stream bots can drive it.
 
 > **Status: in development.** The current release is
-> [0.3.0](https://github.com/SecareLupus/Halocline/releases/latest). Expect rough edges. See
+> [0.3.1](https://github.com/SecareLupus/Halocline/releases/latest). Expect rough edges. See
 > [PLAN.md](PLAN.md) for the design and roadmap.
 
 Linux (Ubuntu) first, then Windows.

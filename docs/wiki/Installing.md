@@ -6,7 +6,7 @@ release](https://github.com/SecareLupus/Halocline/releases/latest).
 - **Ubuntu and Debian:** download the `.deb` file and install it:
 
   ```bash
-  sudo apt install ./halocline_0.3.0_amd64.deb
+  sudo apt install ./halocline_0.3.1_amd64.deb
   ```
 
   Halocline then appears in your applications menu.
@@ -14,13 +14,13 @@ release](https://github.com/SecareLupus/Halocline/releases/latest).
 - **Other distributions:** download the `.AppImage`, make it executable, and run it:
 
   ```bash
-  chmod +x Halocline-0.3.0.AppImage
-  ./Halocline-0.3.0.AppImage
+  chmod +x Halocline-0.3.1.AppImage
+  ./Halocline-0.3.1.AppImage
   ```
 
 ## Windows
 
-Download and run `Halocline-Setup-0.3.0.exe`. The installer isn't signed yet, so Windows SmartScreen
+Download and run `Halocline-Setup-0.3.1.exe`. The installer isn't signed yet, so Windows SmartScreen
 may warn about it: choose **More info**, then **Run anyway**.
 
 ## Updating
