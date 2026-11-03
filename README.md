@@ -5,7 +5,7 @@ now) share one queue, a built-in OBS overlay shows what's playing, and everythin
 also available over an HTTP API with a live event stream, so stream bots can drive it.
 
 > **Status: in development.** The current release is
-> [0.2.0](https://github.com/SecareLupus/Halocline/releases/latest). Expect rough edges. See
+> [0.3.0](https://github.com/SecareLupus/Halocline/releases/latest). Expect rough edges. See
 > [PLAN.md](PLAN.md) for the design and roadmap.
 
 Linux (Ubuntu) first, then Windows.
@@ -14,7 +14,8 @@ Linux (Ubuntu) first, then Windows.
 
 - **One queue for your files and cloud music.** Search both from one box, or paste a YouTube,
   YouTube Music, Spotify, Apple Music, Tidal or Deezer link to play the matching song. Your own
-  copy plays when you have one.
+  copy plays when you have one. Right-click any song to see everything by its artist or on its
+  album.
 - **Library:** music folders are scanned and watched. Cloud songs can be saved alongside your
   files, and duplicates merged.
 - **Stream-safe mode:** tag the songs you've cleared for stream, and only those can be queued or
