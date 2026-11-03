@@ -501,6 +501,14 @@ export class LibraryService {
       where.push('EXISTS (SELECT 1 FROM json_each(r.tags) WHERE lower(value) = lower(?))')
       params.push(query.tag)
     }
+    if (query.artist !== undefined) {
+      where.push('EXISTS (SELECT 1 FROM json_each(r.artists) WHERE lower(value) = lower(?))')
+      params.push(query.artist)
+    }
+    if (query.album !== undefined) {
+      where.push('lower(r.album) = lower(?)')
+      params.push(query.album)
+    }
     if (query.q !== undefined) {
       const fts = toFtsQuery(query.q)
       if (!fts) return { items: [], nextCursor: null }

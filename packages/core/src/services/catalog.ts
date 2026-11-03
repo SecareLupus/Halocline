@@ -2,17 +2,18 @@ import { DomainError } from '../errors'
 import { parseCollectionRef, type YtmCatalog } from '../providers/ytm'
 import { candidateSong, type LinkResolver } from '../resolve/resolver'
 import { looksLikeUrl, parseCollectionLink } from '../resolve/links'
-import type {
-  Recording,
-  RecordingDetail,
-  Resolution,
-  ResolveCandidate,
-  SearchResult,
-  QueueItem,
-  SplitResult,
-  YtmCollection,
-  YtmCollectionDetail,
-  YtmSong,
+import {
+  BrowseFilter,
+  type Recording,
+  type RecordingDetail,
+  type Resolution,
+  type ResolveCandidate,
+  type SearchResult,
+  type QueueItem,
+  type SplitResult,
+  type YtmCollection,
+  type YtmCollectionDetail,
+  type YtmSong,
 } from '../schemas'
 import type { LibraryService } from './library'
 import type { AddToQueue, QueueService } from './queue'
@@ -25,6 +26,13 @@ const collectionRef = (input: string) =>
 
 /** Albums and playlists shown per search, of each kind. */
 const COLLECTIONS_PER_KIND = 4
+
+/** Library songs shown when browsing an artist or album. */
+const BROWSE_LIBRARY_MAX = 1000
+
+/** Whole names, ignoring case and accents: "Beyonce" is "Beyoncé". */
+const sameName = (a: string, b: string) =>
+  a.trim().localeCompare(b.trim(), undefined, { sensitivity: 'base' }) === 0
 
 /**
  * The videoId in a `ytm:<id>` ref: an explicit pick (a search result or a
@@ -127,6 +135,68 @@ export class CatalogService {
           results.push({ kind: 'ytm', ref: `ytm:${song.videoId}`, song })
       }
       for (const collection of (await collections).flat())
+        results.push({ kind: 'ytm-collection', collection })
+    }
+    return results
+  }
+
+  /**
+   * Every library song by an artist or on an album, then YTM songs and albums
+   * that match it exactly (View artist, View album). YTM is searched by name, so
+   * its part is what that search finds, not the artist's whole catalogue.
+   */
+  async browse(filter: BrowseFilter, scope: SearchScope = 'all'): Promise<SearchResult[]> {
+    const { artist, album } = BrowseFilter.parse(filter)
+    const results: SearchResult[] = []
+    const inResults = new Set<string>()
+    if (scope !== 'ytm') {
+      let cursor: string | undefined
+      do {
+        const page = this.library.browse({
+          ...(artist && { artist }),
+          ...(album && { album }),
+          limit: 200,
+          ...(cursor && { cursor }),
+        })
+        for (const recording of page.items) {
+          const sources = this.library.sources(recording.id)
+          for (const s of sources) if (s.kind === 'ytm') inResults.add(s.locator)
+          results.push({ kind: 'library', recording, sources })
+        }
+        cursor = page.nextCursor ?? undefined
+      } while (cursor && results.length < BROWSE_LIBRARY_MAX)
+    }
+    if (scope !== 'library') {
+      const query = [album, artist].filter(Boolean).join(' ')
+      const fits = (song: YtmSong) =>
+        (!artist || song.artists.some((a) => sameName(a, artist))) &&
+        (!album || (song.album !== null && sameName(song.album, album)))
+      const collections = this.ytm
+        .searchCollections(query, 'album', COLLECTIONS_PER_KIND)
+        .then((found) =>
+          found.filter(
+            (c) =>
+              (!album || sameName(c.title, album)) &&
+              (!artist || (c.by ?? '').toLowerCase().includes(artist.toLowerCase())),
+          ),
+        )
+        .catch(() => [])
+      let songs: YtmSong[] = []
+      try {
+        songs = await this.ytm.searchSongs(query)
+      } catch (err) {
+        if (scope === 'ytm' || !results.length) {
+          throw new DomainError(
+            'provider_unavailable',
+            `YouTube Music search failed: ${String(err)}`,
+          )
+        }
+      }
+      for (const song of songs) {
+        if (fits(song) && !inResults.has(song.videoId))
+          results.push({ kind: 'ytm', ref: `ytm:${song.videoId}`, song })
+      }
+      for (const collection of await collections)
         results.push({ kind: 'ytm-collection', collection })
     }
     return results

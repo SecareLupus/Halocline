@@ -7,6 +7,7 @@ import {
   toYtmAccount,
   upscaleArtwork,
   type Core,
+  type SearchResult,
 } from '../src'
 import { fakeYtm, ytmSong } from './helpers'
 
@@ -82,6 +83,71 @@ describe('CatalogService', () => {
     expect(results.map((r) => r.kind)).toEqual(['library', 'ytm'])
     expect(results[1]).toMatchObject({ ref: 'ytm:bbbbbbbbbbb', song: { title: 'Halo Other' } })
     expect((await core.catalog.search('halo', 'library')).map((r) => r.kind)).toEqual(['library'])
+  })
+
+  it('browses an artist or album: library songs, then exact YTM matches', async () => {
+    const by = (videoId: string, title: string, artists: string[], album: string | null) => ({
+      ...ytmSong(videoId, title),
+      artists,
+      album,
+    })
+    const found = [
+      by('aaaaaaaaaaa', 'Saved', ['Mia'], 'Dawn'),
+      by('bbbbbbbbbbb', 'Cloud One', ['mia', 'Zed'], 'Dawn'),
+      by('ccccccccccc', 'Cloud Two', ['Mia'], 'Dusk'),
+      by('ddddddddddd', 'Namesake', ['Miami Sound'], 'Dawn'),
+    ]
+    const queries: string[] = []
+    core = createCore({
+      dbPath: ':memory:',
+      ytm: {
+        ...fakeYtm(),
+        searchSongs: async (q) => (queries.push(q), found),
+        searchCollections: async (_q, kind) =>
+          kind === 'album'
+            ? [
+                { ref: 'ytm-album:A', kind, title: 'Dawn', by: 'Mia', year: null, artwork: null },
+                { ref: 'ytm-album:B', kind, title: 'Dawn', by: 'Other', year: null, artwork: null },
+              ]
+            : [],
+      },
+    })
+    const saved = core.library.create({
+      title: 'Saved',
+      artists: ['Mia'],
+      album: 'Dawn',
+      inLibrary: true,
+    })
+    core.library.addSource(saved.id, { kind: 'ytm', locator: 'aaaaaaaaaaa' })
+    core.library.create({ title: 'Other', artists: ['Zed'], album: 'Dawn', inLibrary: true })
+
+    const names = (results: SearchResult[]) =>
+      results.map((r) =>
+        r.kind === 'library'
+          ? r.recording.title
+          : r.kind === 'ytm'
+            ? r.song.title
+            : r.collection.ref,
+      )
+    expect(names(await core.catalog.browse({ artist: 'Mia' }))).toEqual([
+      'Saved',
+      'Cloud One',
+      'Cloud Two',
+      'ytm-album:A',
+    ])
+    expect(names(await core.catalog.browse({ album: 'dawn' }))).toEqual([
+      'Other',
+      'Saved',
+      'Cloud One',
+      'Namesake',
+      'ytm-album:A',
+      'ytm-album:B',
+    ])
+    expect(names(await core.catalog.browse({ album: 'Dawn', artist: 'Mia' }, 'library'))).toEqual([
+      'Saved',
+    ])
+    expect(queries).toEqual(['Mia', 'dawn'])
+    await expect(core.catalog.browse({})).rejects.toThrow(/artist, an album/)
   })
 
   it('lists queued YTM songs outside the library as YTM results, not library ones', async () => {

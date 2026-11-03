@@ -2,7 +2,7 @@ import type { QueuePosition } from '@halocline/core'
 import { createSignal, For, Show } from 'solid-js'
 import { call } from './bridge'
 import { contextMenu } from './ContextMenu'
-import { TrackLabel } from './Search'
+import { browseItems, TrackLabel } from './Search'
 import { bySourceOrder, sourceLabel } from './sources'
 import type { AppState } from './store'
 
@@ -103,6 +103,8 @@ export function QueueList(props: { state: AppState }) {
                       ),
                   },
                   { label: 'Remove from queue', action: () => remove(item.id) },
+                  null,
+                  ...browseItems(props.state, item.recording),
                 ])}
               >
                 <TrackLabel track={item.recording} />

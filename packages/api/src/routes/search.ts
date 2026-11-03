@@ -9,6 +9,16 @@ const SearchQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
 })
 
+const BrowseQuery = z
+  .object({
+    artist: z.string().trim().min(1).max(200).optional(),
+    album: z.string().trim().min(1).max(200).optional(),
+    scope: z.enum(['library', 'ytm', 'all']).default('all'),
+  })
+  .refine((f) => f.artist !== undefined || f.album !== undefined, {
+    message: 'Give an artist, an album or both',
+  })
+
 const SearchResults = z.object({ results: z.array(SearchResult) })
 
 const ResolveRequest = z.object({
@@ -42,6 +52,34 @@ export function registerSearch(app: OpenAPIHono<ApiEnv>, core: Core) {
     async (c) => {
       const { q, scope, limit } = c.req.valid('query')
       return c.json({ results: await core.catalog.search(q, scope, limit) }, 200)
+    },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/browse',
+      tags: ['search'],
+      summary: 'Every song by an artist or on an album',
+      description:
+        'The same results as `GET /v1/search`, narrowed to one artist or album, matched on the whole ' +
+        'name ignoring case. Give both to narrow to both. Every matching library song comes first, ' +
+        'then YTM songs and albums from a search for the name that match it exactly.',
+      middleware: [requireScope('read')],
+      request: { query: BrowseQuery },
+      responses: {
+        200: {
+          description: 'Results, library first',
+          content: { 'application/json': { schema: SearchResults } },
+        },
+        ...authErrors,
+        400: errorResponse('Neither an artist nor an album'),
+        503: errorResponse('YouTube Music is unreachable and there were no library results'),
+      },
+    }),
+    async (c) => {
+      const { scope, ...filter } = c.req.valid('query')
+      return c.json({ results: await core.catalog.browse(filter, scope) }, 200)
     },
   )
 

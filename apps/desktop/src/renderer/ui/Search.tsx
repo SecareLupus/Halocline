@@ -1,4 +1,5 @@
 import type {
+  BrowseFilter,
   LinkProvider,
   Recording,
   Resolution,
@@ -89,14 +90,35 @@ export function Search(props: { state: AppState }) {
     }, delay)
   }
 
+  /** Every song by an artist or on an album, in place of the search results. */
+  const showBrowse = (filter: BrowseFilter) => {
+    clearTimeout(timer)
+    const id = ++latest
+    setSearching(true)
+    void props.state.run(async () => {
+      try {
+        const found = await call('browse', filter)
+        if (id === latest) {
+          setResults(found)
+          setPasted(null)
+          setResolution(null)
+        }
+      } finally {
+        if (id === latest) setSearching(false)
+      }
+    })
+  }
+  const refresh = () => {
+    const filter = props.state.browsing()
+    if (filter) showBrowse(filter)
+    else search(query(), 0)
+  }
+
+  // Opening an artist or album (from any song's menu) shows it; leaving it goes
+  // back to the search, whose query is kept.
+  createEffect(on(() => props.state.browsing(), refresh, { defer: true }))
   // Refresh results as the scanner or edits change the library.
-  createEffect(
-    on(
-      () => props.state.libraryVersion(),
-      () => search(query(), 0),
-      { defer: true },
-    ),
-  )
+  createEffect(on(() => props.state.libraryVersion(), refresh, { defer: true }))
 
   const addFolder = () => props.state.run(() => call('library.addFolder'))
   const enqueue = (recording: Recording, position: 'next' | 'end') =>
@@ -148,6 +170,7 @@ export function Search(props: { state: AppState }) {
           value={query()}
           onInput={(e) => {
             setQuery(e.currentTarget.value)
+            props.state.browse(null)
             search(e.currentTarget.value)
           }}
         />
@@ -155,9 +178,36 @@ export function Search(props: { state: AppState }) {
           Add folder…
         </button>
       </div>
+      <Show when={props.state.browsing()}>
+        {(filter) => (
+          <div class="results-bar merge-bar">
+            <span>
+              <Show
+                when={filter().album}
+                fallback={
+                  <>
+                    Artist: <strong>{filter().artist}</strong>
+                  </>
+                }
+              >
+                {(album) => (
+                  <>
+                    Album: <strong>{album()}</strong>
+                    <Show when={filter().artist}>{(artist) => <> by {artist()}</>}</Show>
+                  </>
+                )}
+              </Show>
+            </span>
+            <button type="button" onClick={() => props.state.browse(null)}>
+              {query().trim() ? 'Back to search' : 'Close'}
+            </button>
+          </div>
+        )}
+      </Show>
       <Show when={resolution()}>
         {(r) => (
           <LinkResult
+            state={props.state}
             resolution={r()}
             enqueue={(input, position) => void enqueueInput(input, position)}
             radio={(input) => void radio({ input })}
@@ -195,11 +245,13 @@ export function Search(props: { state: AppState }) {
           <p class="empty">
             {searching()
               ? 'Searching…'
-              : query().trim()
-                ? 'No results.'
-                : hasFolders()
-                  ? 'Search by title, artist or album.'
-                  : 'Search YouTube Music, or add a music folder to build your library.'}
+              : props.state.browsing()
+                ? 'No songs found.'
+                : query().trim()
+                  ? 'No results.'
+                  : hasFolders()
+                    ? 'Search by title, artist or album.'
+                    : 'Search YouTube Music, or add a music folder to build your library.'}
           </p>
         }
       >
@@ -222,6 +274,8 @@ export function Search(props: { state: AppState }) {
                       (position) => void enqueue(r, position),
                       () => void radio({ recordingId: r.id }),
                     ),
+                    null,
+                    ...browseItems(props.state, r),
                     null,
                     {
                       label: r.streamSafe ? 'Unmark stream-safe' : 'Mark stream-safe',
@@ -293,6 +347,8 @@ export function Search(props: { state: AppState }) {
                       () => void radio({ song }),
                     ),
                     null,
+                    ...browseItems(props.state, song),
+                    null,
                     { label: 'Save to library', action: () => void saveYtm(song) },
                   ])}
                 >
@@ -357,6 +413,33 @@ function queueItems(enqueue: (position: 'next' | 'end') => void, radio: () => vo
     { label: 'Play next', action: () => enqueue('next') },
     { label: 'Add to queue', action: () => enqueue('end') },
     { label: 'Start radio', action: radio },
+  ]
+}
+
+/**
+ * Right-click items for any song: every song by one of its artists (one item
+ * each when it has several), or on its album by its first artist.
+ */
+export function browseItems(
+  state: AppState,
+  track: Pick<TrackInfo, 'artists' | 'album'>,
+): MenuItem[] {
+  const artists = track.artists.filter((a) => a.trim())
+  const album = track.album?.trim()
+  return [
+    ...artists.map((artist) => ({
+      label: artists.length > 1 ? `View artist: ${artist}` : 'View artist',
+      action: () => state.browse({ artist }),
+    })),
+    // With its artist, since album names repeat ("Discovery", "Greatest Hits").
+    ...(album
+      ? [
+          {
+            label: 'View album',
+            action: () => state.browse({ album, ...(artists[0] && { artist: artists[0] }) }),
+          },
+        ]
+      : []),
   ]
 }
 
@@ -455,12 +538,14 @@ function CollectionRow(props: {
             <For each={d().songs} fallback={<li class="empty">No playable tracks.</li>}>
               {(song) => (
                 <li
-                  onContextMenu={contextMenu(() =>
-                    queueItems(
+                  onContextMenu={contextMenu(() => [
+                    ...queueItems(
                       (position) => props.enqueueSong(song, position),
                       () => props.radio(song),
                     ),
-                  )}
+                    null,
+                    ...browseItems(props.state, song),
+                  ])}
                 >
                   <TrackLabel track={song} />
                   <span class="actions">
@@ -502,6 +587,7 @@ const PROVIDERS: Record<LinkProvider, string> = {
 
 /** A resolved link: what it was read as, then the match (if confident) and alternatives. */
 function LinkResult(props: {
+  state: AppState
   resolution: Resolution
   enqueue: (input: string, position: 'next' | 'end') => void
   radio: (input: string) => void
@@ -532,12 +618,14 @@ function LinkResult(props: {
           {(c) => (
             <li
               classList={{ best: c.input === props.resolution.match?.input }}
-              onContextMenu={contextMenu(() =>
-                queueItems(
+              onContextMenu={contextMenu(() => [
+                ...queueItems(
                   (position) => props.enqueue(c.input, position),
                   () => props.radio(c.input),
                 ),
-              )}
+                null,
+                ...browseItems(props.state, c),
+              ])}
             >
               <TrackLabel track={c} />
               <span class="actions">

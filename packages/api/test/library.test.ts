@@ -60,6 +60,27 @@ describe('library routes', () => {
     expect(bad.json.type).toBe('invalid_request')
   })
 
+  it('browses an artist or album, in the library and through /v1/browse', async () => {
+    const token = tokenFor(['read'])
+    core.library.create({ title: 'One', artists: ['Mia', 'Zed'], album: 'Dawn', inLibrary: true })
+    core.library.create({ title: 'Two', artists: ['Zed'], album: 'Dusk', inLibrary: true })
+    song('Three')
+
+    const byZed = await call('GET', '/v1/library/recordings?artist=zed', token)
+    expect(byZed.json.items.map((r: { title: string }) => r.title)).toEqual(['One', 'Two'])
+    const dawn = await call('GET', '/v1/browse?album=Dawn&scope=library', token)
+    expect(dawn.res.status).toBe(200)
+    expect(dawn.json.results).toEqual([
+      expect.objectContaining({
+        kind: 'library',
+        recording: expect.objectContaining({ title: 'One' }),
+      }),
+    ])
+    const both = await call('GET', '/v1/browse?artist=Mia&album=Dusk', token)
+    expect(both.json.results).toEqual([])
+    expect((await call('GET', '/v1/browse', token)).res.status).toBe(400)
+  })
+
   it('reads one recording with its sources', async () => {
     const r = song('Solo')
     core.library.addSource(r.id, { kind: 'local', locator: '/m/solo.mp3' })

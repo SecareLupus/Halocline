@@ -29,6 +29,8 @@ const BrowseQuery = z.object({
   streamSafe: queryBool().optional(),
   available: queryBool().optional(),
   tag: Tag.optional(),
+  artist: z.string().trim().min(1).max(200).optional(),
+  album: z.string().trim().min(1).max(200).optional(),
   sort: LibrarySort.default('title'),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().max(1000).optional(),

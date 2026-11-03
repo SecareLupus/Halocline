@@ -14,11 +14,24 @@ Each song has buttons when you hover over it:
 - **Save** adds a cloud song to your [library](Library).
 
 Right-click any song for more: **Play next**, **Add to queue**, **Save to library**,
-**[Start radio](Autoplay-and-radio#start-radio)**, and for library songs, stream-safe tagging,
+**[Start radio](Autoplay-and-radio#start-radio)**, **[View artist and View
+album](#view-artist-and-view-album)**, and for library songs, stream-safe tagging,
 merging and splitting.
 
 Albums and playlists open to show their tracks, with **Add all to queue**. Playlists are cut at
 500 songs.
+
+### View artist and View album
+
+Right-click any song, in search, the queue or history, and choose **View artist** or **View
+album** to see every song by that artist or on that album in place of the search results. A song
+with several artists has a **View artist** for each. **View album** shows the album's songs by
+the song's (first) artist, since many albums share a name. Your library's songs come first, then
+the cloud songs and albums a search for the name turns up, so the cloud part may not be the
+artist's whole catalogue. Names must match in full, ignoring case. **Mark all stream-safe** works
+here too.
+
+Press **Back to search** to return to your search, or just type a new one.
 
 ## Pasting a link
 
@@ -40,7 +53,7 @@ YouTube Music album and playlist links work too, and open like albums and playli
 ## The queue
 
 The queue lists what's coming up. Drag songs to reorder them. Hover over a song to remove it, or
-right-click for **Play next** and **Remove from queue**.
+right-click for **Play next**, **Remove from queue**, **View artist** and **View album**.
 
 - **Play from:** a song you have both as a file and in the cloud has a menu to choose where it
   plays from. **Auto** prefers your file.

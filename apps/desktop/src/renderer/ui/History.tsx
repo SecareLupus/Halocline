@@ -2,7 +2,7 @@ import type { HistoryEntry } from '@halocline/core'
 import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from 'solid-js'
 import { call } from './bridge'
 import { contextMenu } from './ContextMenu'
-import { TrackLabel } from './Search'
+import { browseItems, TrackLabel } from './Search'
 import type { AppState } from './store'
 
 /** "Today", "Yesterday", or a short date, in local time. */
@@ -127,6 +127,8 @@ export function History(props: { state: AppState }) {
                         { label: 'Play next', action: () => void enqueue(entry, 'next') },
                         { label: 'Add to queue', action: () => void enqueue(entry, 'end') },
                         { label: 'Start radio', action: () => void radio(entry) },
+                        null,
+                        ...browseItems(props.state, entry.recording),
                         null,
                         entry.recording.inLibrary
                           ? null

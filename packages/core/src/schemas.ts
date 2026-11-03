@@ -83,6 +83,10 @@ export const LibraryQuery = z.object({
   /** Only recordings that can (or can't) be played right now. */
   available: z.boolean().optional(),
   tag: Tag.optional(),
+  /** Only recordings with this among their artists (whole name, ignoring case). */
+  artist: z.string().trim().min(1).max(200).optional(),
+  /** Only recordings on this album (whole name, ignoring case). */
+  album: z.string().trim().min(1).max(200).optional(),
   sort: LibrarySort.default('title'),
   limit: z.number().int().min(1).max(200).default(50),
   /** Opaque; from a previous page's `nextCursor`. */
@@ -200,6 +204,18 @@ export type YtmCollection = z.infer<typeof YtmCollection>
 /** An album or playlist with its tracks, in order. */
 export const YtmCollectionDetail = YtmCollection.extend({ songs: z.array(YtmSong) })
 export type YtmCollectionDetail = z.infer<typeof YtmCollectionDetail>
+
+/** Every song by an artist or on an album (View artist, View album). Both given, both must hold. */
+export const BrowseFilter = z
+  .object({
+    artist: z.string().trim().min(1).max(200),
+    album: z.string().trim().min(1).max(200),
+  })
+  .partial()
+  .refine((f) => f.artist !== undefined || f.album !== undefined, {
+    message: 'Give an artist, an album or both',
+  })
+export type BrowseFilter = z.infer<typeof BrowseFilter>
 
 export const SearchResult = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('library'), recording: Recording, sources: z.array(Source) }),

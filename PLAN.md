@@ -160,7 +160,10 @@ Phase 3 as built:
   - Row buttons are only Save, Next, Add (and ✕ in the queue), shown on the row under the pointer
     or in focus. Anything more goes on the row's right-click menu, never another button. Every
     row's menu repeats its buttons' actions too; songs in search and
-    history add **Start radio** (§7).
+    history add **Start radio** (§7). Every song's menu (search, queue, history) has **View
+    artist** (one per artist) and **View album** (with the song's first artist, since album names
+    repeat), which show that artist's or album's songs in the
+    search pane (`GET /v1/browse`), with a bar to go back to the search, whose query is kept.
   - Clicking the bar's art opens the **player view**: big art, progress and controls, the queue
     below, no search. The faint ⌄ in its corner (or Escape) goes back.
 
@@ -363,6 +366,7 @@ the app rather than a CDN, so it works offline under a strict CSP. Reading needs
 | `POST /v1/queue/radio` | `{ input, requestedBy? }`: Start radio (§7). Clears the queue, queues the song, fills to "Keep queued" whatever the autoplay switch says, and returns the new queue (`queue:manage`) |
 | `GET /v1/search?q=&scope=library\|ytm\|all` | unified results; each carries `recordingId` (or a provider ref) and its available sources. YTM albums and playlists come last (`ytm-collection`, up to four of each) |
 | `GET /v1/collections/{ref}` · `POST /v1/queue/collections` | an album's or playlist's tracks (`ytm-album:…`, `ytm-playlist:…`; playlists cut at 500); enqueue all of it in order, as one change. `POST` also takes a YouTube Music album or playlist link (an album's Share link, `playlist?list=OLAK5uy_…`, is looked up as the album). YouTube Music's playlist page names no owner, so a playlist opened this way is described by its tracks' artists ("Daft Punk", or "Daft Punk, Justice & 12 more"). In stream-safe mode untagged songs are left out and counted in `skipped`. `POST /v1/queue/items` refuses such links with a pointer here |
+| `GET /v1/browse?artist=&album=&scope=` | every song by an artist or on an album (both given, both must hold), matched on the whole name ignoring case, shaped like search: every library match, then YTM songs and albums from a search for the name that match it exactly. `GET /v1/library/recordings` takes the same `artist` and `album` filters |
 | `POST /v1/resolve` | link to a match or candidates, without enqueueing |
 | `GET /v1/library/recordings` · `PATCH /v1/library/recordings/{id}` | browse; add or remove from library; set `stream_safe` and tags (with a bulk variant) |
 | `GET /v1/analysis` | audio analysis progress (§7) |

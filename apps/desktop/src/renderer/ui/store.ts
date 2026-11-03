@@ -1,5 +1,6 @@
 import type {
   AnalysisStatus,
+  BrowseFilter,
   Health,
   OutputState,
   PlayerState,
@@ -24,6 +25,8 @@ export function createAppState() {
   const [error, setError] = createSignal<string | null>(null)
   /** Bumped when the library changes, so views can re-run their queries. */
   const [libraryVersion, setLibraryVersion] = createSignal(0)
+  /** The artist or album the search pane is showing (View artist, View album), if any. */
+  const [browsing, browse] = createSignal<BrowseFilter | null>(null)
 
   const refreshQueue = () => call('queue.list').then(setQueue)
   void call('player.get').then(setPlayer)
@@ -80,6 +83,8 @@ export function createAppState() {
     ytm,
     analysis,
     libraryVersion,
+    browsing,
+    browse,
     error,
     run,
   }

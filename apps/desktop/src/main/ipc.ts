@@ -1,4 +1,5 @@
 import {
+  BrowseFilter,
   BulkRecordingPatch,
   DomainError,
   Id,
@@ -47,6 +48,7 @@ export function registerIpc(core: Core, apiUrl: () => string | null): void {
   const handlers: { [C in IpcChannel]: Handler<C> } = {
     'library.search': (a) => core.library.search(z.object({ q: z.string() }).parse(a).q),
     search: (a) => core.catalog.search(z.object({ q: z.string().min(1).max(200) }).parse(a).q),
+    browse: (a) => core.catalog.browse(BrowseFilter.parse(a)),
     resolve: (a) =>
       core.catalog.preview(z.object({ input: z.string().min(1).max(2000) }).parse(a).input),
     'queue.addInput': async (a) => {

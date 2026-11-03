@@ -4,6 +4,7 @@ import type {
   AnalysisStatus,
   ApiToken,
   AudioFeatures,
+  BrowseFilter,
   BulkResult,
   Health,
   HistoryPage,
@@ -48,6 +49,8 @@ export interface IpcHandlers {
   'library.search': (args: { q: string }) => Recording[]
   /** Library first, then YouTube Music songs. */
   search: (args: { q: string }) => SearchResult[]
+  /** Every song by an artist or on an album, shaped like search results. */
+  browse: (args: BrowseFilter) => SearchResult[]
   'queue.addYtm': (args: { song: YtmSong; position?: QueuePosition }) => QueueItem
   /** A YouTube Music album or playlist with its tracks. */
   'collection.get': (args: { ref: string }) => YtmCollectionDetail

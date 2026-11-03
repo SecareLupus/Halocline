@@ -1,4 +1,4 @@
-import { createSignal, Match, onCleanup, Show, Switch } from 'solid-js'
+import { createEffect, createSignal, Match, on, onCleanup, Show, Switch } from 'solid-js'
 import { ContextMenuHost } from './ContextMenu'
 import { History } from './History'
 import { NowPlaying } from './NowPlaying'
@@ -20,6 +20,8 @@ export function App() {
   /** Search beside (or over) the queue, or one full-window view in its place. */
   const [view, setView] = createSignal<View>('main')
   const toggle = (v: View) => setView((current) => (current === v ? 'main' : v))
+  // View artist and View album show in search, from wherever they were picked.
+  createEffect(on(state.browsing, (filter) => filter && setView('main'), { defer: true }))
 
   const narrow = matchMedia(STACKED)
   const [stacked, setStacked] = createSignal(narrow.matches)

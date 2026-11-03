@@ -78,6 +78,18 @@ describe('LibraryService.browse', () => {
       sourceKinds: ['local'],
     })
   })
+
+  it('filters by whole artist or album name, ignoring case', () => {
+    add('Golf', 'Mia & Zed')
+    core.library.create({ title: 'Hotel', artists: ['Abe', 'Mia'], inLibrary: true })
+    const [bravo] = core.library.search('bravo')
+    core.library.update(bravo!.id, { album: 'First Light' })
+
+    expect(all({ artist: 'MIA' }).sort()).toEqual(['Alpha', 'charlie', 'Hotel'].sort())
+    expect(all({ album: 'first light' })).toEqual(['Bravo'])
+    expect(all({ artist: 'Abe', album: 'First Light' })).toEqual(['Bravo'])
+    expect(all({ artist: 'Mia', album: 'First Light' })).toEqual([])
+  })
 })
 
 describe('LibraryService edits', () => {
