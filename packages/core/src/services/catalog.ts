@@ -143,7 +143,8 @@ export class CatalogService {
   /**
    * Every library song by an artist or on an album, then YTM songs and albums
    * that match it exactly (View artist, View album). YTM is searched by name, so
-   * its part is what that search finds, not the artist's whole catalogue.
+   * its part is what that search finds, not the artist's whole catalogue; an
+   * album that's the only match has all its tracks listed.
    */
   async browse(filter: BrowseFilter, scope: SearchScope = 'all'): Promise<SearchResult[]> {
     const { artist, album } = BrowseFilter.parse(filter)
@@ -181,23 +182,33 @@ export class CatalogService {
           ),
         )
         .catch(() => [])
-      let songs: YtmSong[] = []
-      try {
-        songs = await this.ytm.searchSongs(query)
-      } catch (err) {
-        if (scope === 'ytm' || !results.length) {
-          throw new DomainError(
-            'provider_unavailable',
-            `YouTube Music search failed: ${String(err)}`,
-          )
-        }
+      let failed: unknown
+      const searched = this.ytm.searchSongs(query).catch((err: unknown) => {
+        failed = err
+        return [] as YtmSong[]
+      })
+      // The album is shown whole and in order, not just the tracks the song search
+      // turned up: the best match with its artist given (YTM may list an album
+      // twice, e.g. clean and explicit), or the only one by that name without.
+      const albums = await collections
+      const whole = album && (artist ? albums[0] : albums.length === 1 && albums[0])
+      const albumSongs = whole
+        ? (await this.ytm.getCollection(whole.ref).catch(() => undefined))?.songs
+        : undefined
+      const tracks = albumSongs?.length ? albumSongs : undefined
+      const songs = tracks ?? (await searched).filter(fits)
+      // With library results to show, a YTM outage shouldn't fail the browse.
+      if (!tracks && failed !== undefined && (scope === 'ytm' || !results.length)) {
+        throw new DomainError(
+          'provider_unavailable',
+          `YouTube Music search failed: ${String(failed)}`,
+        )
       }
       for (const song of songs) {
-        if (fits(song) && !inResults.has(song.videoId))
+        if (!inResults.has(song.videoId))
           results.push({ kind: 'ytm', ref: `ytm:${song.videoId}`, song })
       }
-      for (const collection of await collections)
-        results.push({ kind: 'ytm-collection', collection })
+      for (const collection of albums) results.push({ kind: 'ytm-collection', collection })
     }
     return results
   }

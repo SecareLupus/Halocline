@@ -27,8 +27,9 @@ Right-click any song, in search, the queue or history, and choose **View artist*
 album** to see every song by that artist or on that album in place of the search results. A song
 with several artists has a **View artist** for each. **View album** shows the album's songs by
 the song's (first) artist, since many albums share a name. Your library's songs come first, then
-the cloud songs and albums a search for the name turns up, so the cloud part may not be the
-artist's whole catalogue. Names must match in full, ignoring case. **Mark all stream-safe** works
+cloud music. For an album, that's the whole album in track order, when the cloud has it. For an
+artist, it's the songs and albums a search for the name turns up, which may not be the artist's
+whole catalogue. Names must match in full, ignoring case. **Mark all stream-safe** works
 here too.
 
 Press **Back to search** to return to your search, or just type a new one.

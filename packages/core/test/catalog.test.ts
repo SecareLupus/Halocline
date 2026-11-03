@@ -110,6 +110,13 @@ describe('CatalogService', () => {
                 { ref: 'ytm-album:B', kind, title: 'Dawn', by: 'Other', year: null, artwork: null },
               ]
             : [],
+        getCollection: async (ref) => {
+          if (ref === 'ytm-album:B') throw new Error('offline')
+          if (ref !== 'ytm-album:A') return undefined
+          const album = { ref, kind: 'album' as const, title: 'Dawn', by: 'Mia', year: null }
+          const tracks = [found[0]!, by('eeeeeeeeeee', 'Track Two', ['Mia'], 'Dawn')]
+          return { ...album, artwork: null, songs: tracks }
+        },
       },
     })
     const saved = core.library.create({
@@ -146,7 +153,20 @@ describe('CatalogService', () => {
     expect(names(await core.catalog.browse({ album: 'Dawn', artist: 'Mia' }, 'library'))).toEqual([
       'Saved',
     ])
-    expect(queries).toEqual(['Mia', 'dawn'])
+    // Its one matching album, by name and artist, is listed whole, in album order.
+    expect(names(await core.catalog.browse({ album: 'Dawn', artist: 'Mia' }))).toEqual([
+      'Saved',
+      'Track Two',
+      'ytm-album:A',
+    ])
+    // No album, or one that can't be fetched: the song search's exact matches.
+    expect(names(await core.catalog.browse({ album: 'Dusk', artist: 'Mia' }))).toEqual([
+      'Cloud Two',
+    ])
+    expect(names(await core.catalog.browse({ album: 'Dawn', artist: 'Other' }))).toEqual([
+      'ytm-album:B',
+    ])
+    expect(queries).toEqual(['Mia', 'dawn', 'Dawn Mia', 'Dusk Mia', 'Dawn Other'])
     await expect(core.catalog.browse({})).rejects.toThrow(/artist, an album/)
   })
 

@@ -64,7 +64,9 @@ export function registerSearch(app: OpenAPIHono<ApiEnv>, core: Core) {
       description:
         'The same results as `GET /v1/search`, narrowed to one artist or album, matched on the whole ' +
         'name ignoring case. Give both to narrow to both. Every matching library song comes first, ' +
-        'then YTM songs and albums from a search for the name that match it exactly.',
+        'then YTM songs and albums from a search for the name that match it exactly. For an album, ' +
+        "the matching YTM album's whole tracklist, in order, takes the place of the song search's " +
+        'tracks: the best match when an artist is given, or the only one by that name.',
       middleware: [requireScope('read')],
       request: { query: BrowseQuery },
       responses: {
